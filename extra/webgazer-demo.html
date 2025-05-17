@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebGazer Eye Tracking Demo</title>
+    <script
+      src="https://webgazer.cs.brown.edu/webgazer.js"
+      onerror="document.getElementById('status').textContent = 'Status: Failed to load WebGazer script';"
+      onload="window.dispatchEvent(new Event('webgazerLoaded'));"
+    ></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .calibration-area {
+        border: 1px solid #ccc;
+        padding: 20px;
+        height: 300px;
+        position: relative;
+      }
+
+      .calibration-point {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: red;
+        cursor: pointer;
+        transform: translate(-50%, -50%);
+      }
+
+      .controls {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        background-color: #f9f9f9;
+      }
+
+      .settings {
+        margin-top: 20px;
+      }
+
+      button {
+        padding: 8px 15px;
+        margin: 5px;
+        cursor: pointer;
+      }
+
+      #prediction-dot {
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: rgba(0, 0, 255, 0.7);
+        z-index: 1000;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        transition: left 0.05s ease-out, top 0.05s ease-out; /* Smooth transitions */
+        box-shadow: 0 0 5px 2px rgba(0, 0, 255, 0.3);
+      }
+
+      canvas {
+        margin-top: 10px;
+      }
+
+      .option-group {
+        margin-bottom: 10px;
+      }
+
+      .option-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+
+      #heatmapCanvas {
+        width: 100%;
+        height: 300px;
+        border: 1px solid #ddd;
+      }
+
+      .status {
+        font-weight: bold;
+        margin-top: 10px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      /* Full screen calibration overlay */
+      .full-calibration-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.9);
+        z-index: 9999;
+        display: none;
+      }
+
+      .full-calibration-container {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+
+      .full-calibration-point {
+        position: absolute;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        background-color: red;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 15px 5px rgba(255, 0, 0, 0.5);
+      }
+
+      .full-calibration-instructions {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        font-size: 24px;
+        text-align: center;
+        width: 80%;
+      }
+
+      .full-calibration-progress {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        font-size: 18px;
+        text-align: center;
+      }
+
+      .exit-calibration {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background-color: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid white;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>WebGazer Eye Tracking Demo</h1>
+
+    <div class="status" id="status">Status: Not started</div>
+
+    <div class="controls">
+      <button id="start">Start WebGazer</button>
+      <button id="stop" disabled>Stop WebGazer</button>
+      <button id="calibrate" disabled>Enter Calibration Mode</button>
+      <button id="showPrediction" disabled>Show Prediction</button>
+      <button id="hidePrediction" disabled>Hide Prediction</button>
+      <button id="showVideo" disabled>Show Video Feed</button>
+      <button id="hideVideo" disabled>Hide Video Feed</button>
+      <button id="showHeatmap" disabled>Show Heatmap</button>
+      <button id="clearData" disabled>Clear Calibration Data</button>
+    </div>
+
+    <div class="container">
+      <div>
+        <h2>Calibration</h2>
+        <p>Click on each dot when it appears to calibrate the system:</p>
+        <div class="calibration-area" id="calibration-area">
+          <!-- Calibration points will be added here dynamically -->
+        </div>
+      </div>
+
+      <div>
+        <h2>Video Feed</h2>
+        <div id="video-container">
+          <!-- WebGazer adds the video here -->
+        </div>
+
+        <div id="heatmap-container" class="hidden">
+          <h3>Gaze Heatmap</h3>
+          <canvas id="heatmapCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings">
+      <h2>Accuracy Settings</h2>
+
+      <div class="option-group">
+        <label for="regression-type">Regression Type:</label>
+        <select id="regression-type">
+          <option value="weightedRidge">Weighted Ridge (Default)</option>
+          <option value="ridge">Ridge</option>
+          <option value="threadedRidge">Threaded Ridge</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="tracker-type">Tracker Type:</label>
+        <select id="tracker-type">
+          <option value="clmtrackr">CLM Tracker (Default)</option>
+          <option value="js_objectdetect">JS Object Detect</option>
+          <option value="webgazer">WebGazer</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="sample-rate">Sample Rate (ms):</label>
+        <input type="number" id="sample-rate" min="10" max="1000" value="100" />
+        <button id="update-sample-rate">Update</button>
+      </div>
+
+      <div class="option-group">
+        <label>Additional Options:</label>
+        <div>
+          <input type="checkbox" id="static-calibration" />
+          <label for="static-calibration">Enable Static Calibration</label>
+        </div>
+
+        <div>
+          <input type="checkbox" id="face-detection" />
+          <label for="face-detection">Enable Face Detection</label>
+        </div>
+
+        <div>
+          <input type="checkbox" id="blink-detection" />
+          <label for="blink-detection">Enable Blink Detection</label>
+        </div>
+
+        <div class="option-group">
+          <label for="smoothing-factor"
+            >Prediction Smoothing Factor:
+            <span id="smoothing-value">15</span></label
+          >
+          <input
+            type="range"
+            id="smoothing-factor"
+            min="1"
+            max="30"
+            value="15"
+          />
+          <p class="hint">
+            Higher values = smoother but more lag, lower values = responsive but
+            may oscillate
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="prediction-dot" style="display: none"></div>
+
+    <!-- Full screen calibration overlay -->
+    <div class="full-calibration-overlay" id="full-calibration-overlay">
+      <div class="full-calibration-container" id="full-calibration-container">
+        <div
+          class="full-calibration-instructions"
+          id="calibration-instructions"
+        >
+          Look at the red dot and click on it when it pulses
+        </div>
+        <div class="full-calibration-progress" id="calibration-progress">
+          Point 1 of 9
+        </div>
+        <button class="exit-calibration" id="exit-calibration">
+          Exit Calibration
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // DOM elements
+      const statusElement = document.getElementById("status");
+      const startButton = document.getElementById("start");
+      const stopButton = document.getElementById("stop");
+      const calibrateButton = document.getElementById("calibrate");
+      const showPredictionButton = document.getElementById("showPrediction");
+      const hidePredictionButton = document.getElementById("hidePrediction");
+      const showVideoButton = document.getElementById("showVideo");
+      const hideVideoButton = document.getElementById("hideVideo");
+      const showHeatmapButton = document.getElementById("showHeatmap");
+      const clearDataButton = document.getElementById("clearData");
+      const predictionDot = document.getElementById("prediction-dot");
+      const calibrationArea = document.getElementById("calibration-area");
+      const regressionTypeSelect = document.getElementById("regression-type");
+      const trackerTypeSelect = document.getElementById("tracker-type");
+      const sampleRateInput = document.getElementById("sample-rate");
+      const updateSampleRateButton =
+        document.getElementById("update-sample-rate");
+      const staticCalibrationCheckbox =
+        document.getElementById("static-calibration");
+      const faceDetectionCheckbox = document.getElementById("face-detection");
+      const blinkDetectionCheckbox = document.getElementById("blink-detection");
+      const heatmapContainer = document.getElementById("heatmap-container");
+      const heatmapCanvas = document.getElementById("heatmapCanvas");
+
+      // Gaze data for heatmap
+      let gazeData = [];
+      let isCalibrationMode = false;
+      let isWebGazerActive = false;
+      let isPredictionVisible = false;
+      let isHeatmapActive = false;
+      let calibrationPoints = [];
+
+      // Initialize calibration points
+      function setupCalibrationPoints() {
+        calibrationArea.innerHTML = "";
+        calibrationPoints = [];
+
+        // Define 9 calibration points (3x3 grid)
+        const positions = [
+          { x: 10, y: 10 },
+          { x: 50, y: 10 },
+          { x: 90, y: 10 },
+          { x: 10, y: 50 },
+          { x: 50, y: 50 },
+          { x: 90, y: 50 },
+          { x: 10, y: 90 },
+          { x: 50, y: 90 },
+          { x: 90, y: 90 },
+        ];
+
+        positions.forEach((pos, index) => {
+          const point = document.createElement("div");
+          point.className = "calibration-point";
+          point.style.left = `${pos.x}%`;
+          point.style.top = `${pos.y}%`;
+          point.style.display = "none";
+          point.dataset.index = index;
+
+          point.addEventListener("click", () => {
+            // Hide current point
+            point.style.display = "none";
+
+            // Show next point or finish calibration
+            const nextIndex = parseInt(point.dataset.index) + 1;
+            if (nextIndex < calibrationPoints.length) {
+              calibrationPoints[nextIndex].style.display = "block";
+            } else {
+              isCalibrationMode = false;
+              statusElement.textContent = "Status: Calibration complete";
+            }
+          });
+
+          calibrationArea.appendChild(point);
+          calibrationPoints.push(point);
+        });
+      }
+
+      // Initialize WebGazer
+      function initWebGazer() {
+        statusElement.textContent = "Status: Initializing...";
+
+        // Set up regression and tracker types before starting
+        const regressionType = regressionTypeSelect.value;
+        const trackerType = trackerTypeSelect.value;
+
+        // Apply settings
+        switch (regressionType) {
+          case "ridge":
+            webgazer.setRegression("ridge");
+            break;
+          case "weightedRidge":
+            webgazer.setRegression("weightedRidge");
+            break;
+          case "threadedRidge":
+            webgazer.setRegression("threadedRidge");
+            break;
+        }
+
+        // Apply tracker type settings
+        switch (trackerType) {
+          case "clmtrackr":
+            webgazer.setTracker("clmtrackr");
+            break;
+          case "js_objectdetect":
+            webgazer.setTracker("js_objectdetect");
+            break;
+          case "webgazer":
+            webgazer.setTracker("webgazer");
+            break;
+        }
+
+        // Apply checkbox settings
+        if (staticCalibrationCheckbox.checked) {
+          webgazer.applyKalmanFilter(true);
+        } else {
+          webgazer.applyKalmanFilter(false);
+        }
+
+        // Globals for smoothing prediction
+        let recentXValues = [];
+        let recentYValues = [];
+        let smoothingWindowSize = 15; // Number of recent positions to average - now a variable
+
+        // Start webgazer with proper initialization handling
+        webgazer
+          .setGazeListener(function (data, elapsedTime) {
+            if (data == null) return;
+
+            // Apply smoothing to reduce oscillations
+            if (isPredictionVisible && data) {
+              // Add current values to arrays
+              recentXValues.push(data.x);
+              recentYValues.push(data.y);
+
+              // Keep arrays at smoothingWindowSize elements
+              if (recentXValues.length > smoothingWindowSize) {
+                recentXValues.shift();
+                recentYValues.shift();
+              }
+
+              // Calculate smoothed values (average of recent positions)
+              let smoothedX = 0;
+              let smoothedY = 0;
+
+              for (let i = 0; i < recentXValues.length; i++) {
+                smoothedX += recentXValues[i];
+                smoothedY += recentYValues[i];
+              }
+
+              smoothedX /= recentXValues.length;
+              smoothedY /= recentYValues.length;
+
+              // Update prediction dot position
+              predictionDot.style.display = "block";
+              predictionDot.style.left = smoothedX + "px";
+              predictionDot.style.top = smoothedY + "px";
+
+              // Store data for heatmap
+              if (isHeatmapActive) {
+                gazeData.push({ x: smoothedX, y: smoothedY });
+                if (gazeData.length > 100) {
+                  gazeData.shift(); // Limit stored points
+                }
+                updateHeatmap();
+              }
+            } else {
+              predictionDot.style.display = "none";
+            }
+          })
+          .begin()
+          .then(function () {
+            // Called when webgazer is fully initialized
+            console.log("WebGazer successfully initialized");
+
+            // Update UI state
+            isWebGazerActive = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            calibrateButton.disabled = false;
+            showPredictionButton.disabled = false;
+            hidePredictionButton.disabled = false;
+            showVideoButton.disabled = false;
+            hideVideoButton.disabled = false;
+            showHeatmapButton.disabled = false;
+            clearDataButton.disabled = false;
+
+            statusElement.textContent = "Status: WebGazer active";
+          })
+          .catch(function (err) {
+            console.error("Error initializing webgazer:", err);
+            statusElement.textContent =
+              "Status: Error initializing WebGazer. Check console for details.";
+          });
+
+        // Set sampling rate
+        webgazer.setSampleRate(parseInt(sampleRateInput.value));
+
+        // Additional settings
+        if (faceDetectionCheckbox.checked) {
+          webgazer.params.faceFeedbackBoxColor = "green";
+          webgazer.showFaceDetectionFeedback();
+        } else {
+          webgazer.showFaceDetectionFeedback(false);
+        }
+
+        if (blinkDetectionCheckbox.checked) {
+          webgazer.detectBlinking(true);
+        } else {
+          webgazer.detectBlinking(false);
+        }
+
+        // Note: UI update now happens in the promise .then() handler
+      }
+
+      // Start calibration mode
+      function startCalibration() {
+        isCalibrationMode = true;
+        statusElement.textContent =
+          "Status: Calibration mode active - click dots as they appear";
+
+        // Show first calibration point
+        if (calibrationPoints.length > 0) {
+          calibrationPoints[0].style.display = "block";
+        }
+      }
+
+      // Draw heatmap from gaze data
+      function updateHeatmap() {
+        if (!isHeatmapActive || gazeData.length === 0) return;
+
+        const ctx = heatmapCanvas.getContext("2d");
+        const width = heatmapCanvas.width;
+        const height = heatmapCanvas.height;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+
+        // Simple heatmap - draw points with transparency
+        gazeData.forEach((point, index) => {
+          // Scale points to canvas size
+          const x = (point.x / window.innerWidth) * width;
+          const y = (point.y / window.innerHeight) * height;
+
+          // More recent points are more opaque
+          const opacity = 0.1 + (index / gazeData.length) * 0.9;
+
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 0, 0, ${opacity})`;
+          ctx.fill();
+        });
+      }
+
+      // Event listeners
+      startButton.addEventListener("click", function () {
+        startButton.disabled = true; // Disable immediately to prevent multiple clicks
+        statusElement.textContent =
+          "Status: Initializing... Please wait and allow camera access";
+        setTimeout(initWebGazer, 100); // Small delay to ensure UI updates before heavy processing
+      });
+
+      stopButton.addEventListener("click", () => {
+        try {
+          webgazer.end();
+          isWebGazerActive = false;
+          isPredictionVisible = false;
+          isHeatmapActive = false;
+          predictionDot.style.display = "none";
+          heatmapContainer.classList.add("hidden");
+
+          startButton.disabled = false;
+          stopButton.disabled = true;
+          calibrateButton.disabled = true;
+          showPredictionButton.disabled = true;
+          hidePredictionButton.disabled = true;
+          showVideoButton.disabled = true;
+          hideVideoButton.disabled = true;
+          showHeatmapButton.disabled = true;
+          clearDataButton.disabled = true;
+
+          statusElement.textContent = "Status: WebGazer stopped";
+        } catch (err) {
+          console.error("Error stopping WebGazer:", err);
+          statusElement.textContent = "Status: Error stopping WebGazer";
+
+          // Reset UI state anyway
+          startButton.disabled = false;
+          stopButton.disabled = true;
+          calibrateButton.disabled = true;
+          showPredictionButton.disabled = true;
+          hidePredictionButton.disabled = true;
+          showVideoButton.disabled = true;
+          hideVideoButton.disabled = true;
+          showHeatmapButton.disabled = true;
+          clearDataButton.disabled = true;
+        }
+      });
+
+      calibrateButton.addEventListener("click", () => {
+        startFullCalibration();
+      });
+
+      showPredictionButton.addEventListener("click", () => {
+        isPredictionVisible = true;
+        predictionDot.style.display = "block";
+        statusElement.textContent = "Status: Prediction visible";
+      });
+
+      hidePredictionButton.addEventListener("click", () => {
+        isPredictionVisible = false;
+        predictionDot.style.display = "none";
+        statusElement.textContent = "Status: Prediction hidden";
+      });
+
+      showVideoButton.addEventListener("click", () => {
+        webgazer.showVideo(true);
+        webgazer.showFaceFeaturePoints(true);
+        statusElement.textContent = "Status: Video feed visible";
+      });
+
+      hideVideoButton.addEventListener("click", () => {
+        webgazer.showVideo(false);
+        webgazer.showFaceFeaturePoints(false);
+        statusElement.textContent = "Status: Video feed hidden";
+      });
+
+      showHeatmapButton.addEventListener("click", () => {
+        isHeatmapActive = !isHeatmapActive;
+
+        if (isHeatmapActive) {
+          heatmapContainer.classList.remove("hidden");
+          gazeData = [];
+
+          // Set canvas dimensions
+          heatmapCanvas.width = heatmapCanvas.offsetWidth;
+          heatmapCanvas.height = heatmapCanvas.offsetHeight;
+
+          showHeatmapButton.textContent = "Hide Heatmap";
+          statusElement.textContent = "Status: Heatmap activated";
+        } else {
+          heatmapContainer.classList.add("hidden");
+          showHeatmapButton.textContent = "Show Heatmap";
+          statusElement.textContent = "Status: Heatmap deactivated";
+        }
+      });
+
+      clearDataButton.addEventListener("click", () => {
+        webgazer.clearData();
+        gazeData = [];
+        if (heatmapCanvas.getContext) {
+          const ctx = heatmapCanvas.getContext("2d");
+          ctx.clearRect(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+        }
+        statusElement.textContent = "Status: Calibration data cleared";
+      });
+
+      // Additional settings for smoother tracking
+      const smoothingFactorSlider = document.getElementById("smoothing-factor");
+
+      updateSampleRateButton.addEventListener("click", () => {
+        const rate = parseInt(sampleRateInput.value);
+        if (isWebGazerActive && rate >= 10 && rate <= 1000) {
+          webgazer.setSampleRate(rate);
+          statusElement.textContent = `Status: Sample rate updated to ${rate}ms`;
+        }
+      });
+
+      // Update smoothing factor when slider changes
+      smoothingFactorSlider.addEventListener("change", () => {
+        // We'll update our global smoothingWindowSize
+        const value = parseInt(smoothingFactorSlider.value);
+        smoothingWindowSize = value;
+        // Clear existing values to start fresh with new smoothing window
+        recentXValues = [];
+        recentYValues = [];
+        document.getElementById("smoothing-value").textContent = value;
+      });
+
+      // Set up calibration points on load
+      window.addEventListener("load", function () {
+        setupCalibrationPoints(); // Keep for the small calibration area
+
+        // Add event listener for webgazer loaded
+        window.addEventListener("webgazerLoaded", function () {
+          console.log("WebGazer script has been loaded");
+          startButton.disabled = false;
+          statusElement.textContent = "Status: Ready to start";
+        });
+
+        // If WebGazer fails to load after 5 seconds, show error
+        setTimeout(function () {
+          if (typeof webgazer === "undefined") {
+            statusElement.textContent = "Status: Error loading WebGazer script";
+            console.error("WebGazer script failed to load");
+          }
+        }, 5000);
+      });
+
+      // Handle window resize for heatmap
+      window.addEventListener("resize", () => {
+        if (heatmapCanvas) {
+          heatmapCanvas.width = heatmapCanvas.offsetWidth;
+          heatmapCanvas.height = heatmapCanvas.offsetHeight;
+          updateHeatmap();
+        }
+      });
+
+      // Full screen calibration functionality
+      function startFullCalibration() {
+        const overlay = document.getElementById("full-calibration-overlay");
+        const container = document.getElementById("full-calibration-container");
+        const instructions = document.getElementById(
+          "calibration-instructions"
+        );
+        const progress = document.getElementById("calibration-progress");
+        const exitButton = document.getElementById("exit-calibration");
+
+        overlay.style.display = "block";
+        isCalibrationMode = true;
+
+        // Define calibration points for full screen
+        const points = [
+          { x: 10, y: 10 },
+          { x: 50, y: 10 },
+          { x: 90, y: 10 },
+          { x: 10, y: 50 },
+          { x: 50, y: 50 },
+          { x: 90, y: 50 },
+          { x: 10, y: 90 },
+          { x: 50, y: 90 },
+          { x: 90, y: 90 },
+        ];
+
+        let currentPoint = 0;
+
+        function showNextPoint() {
+          if (currentPoint >= points.length) {
+            // Calibration complete
+            overlay.style.display = "none";
+            isCalibrationMode = false;
+            statusElement.textContent = "Status: Calibration complete";
+            return;
+          }
+
+          // Clear previous point
+          const oldPoint = container.querySelector(".full-calibration-point");
+          if (oldPoint) {
+            oldPoint.remove();
+          }
+
+          // Create and show new point
+          const point = document.createElement("div");
+          point.className = "full-calibration-point";
+          point.style.left = `${points[currentPoint].x}%`;
+          point.style.top = `${points[currentPoint].y}%`;
+
+          // Add click handler
+          point.addEventListener("click", () => {
+            currentPoint++;
+            progress.textContent = `Point ${currentPoint + 1} of ${
+              points.length
+            }`;
+            showNextPoint();
+          });
+
+          container.appendChild(point);
+        }
+
+        // Start with first point
+        showNextPoint();
+
+        // Handle exit button
+        exitButton.addEventListener("click", () => {
+          overlay.style.display = "none";
+          isCalibrationMode = false;
+          statusElement.textContent = "Status: Calibration cancelled";
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f0f0f0;
+        overflow: hidden;
+        position: relative;
+      }
+      .button {
+        position: absolute;
+        width: 200px;
+        height: 200px;
+        text-align: center;
+        line-height: 150px;
+        font-size: 20px;
+        font-weight: bold;
+        border-radius: 50%;
+        color: white;
+        background-color: #007bff;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .button:hover,
+      .button.highlight {
+        transform: scale(1.1);
+        box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+      }
+      #forward {
+        top: 10%;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      #backward {
+        bottom: 10%;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      #left {
+        left: 10%;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      #right {
+        right: 10%;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      #connect {
+        position: absolute;
+        top: 50px;
+        right: 10px;
+        padding: 10px 15px;
+        background-color: #28a745;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      #clearCalibration {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 10px 15px;
+        background-color: #ff4d4d;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      #status {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+      }
+    </style>
+    <title>Eye-Controlled ESP32 Car</title>
+  </head>
+  <body>
+    <div id="forward" class="button">Forward</div>
+    <div id="backward" class="button">Backward</div>
+    <div id="left" class="button">Left</div>
+    <div id="right" class="button">Right</div>
+    <button id="connect">Connect to ESP32</button>
+    <div id="speedControl" style="position: absolute; top: 100px; right: 10px">
+      <label for="speedSlider">Speed: </label>
+      <input type="range" id="speedSlider" min="0" max="255" value="255" />
+      <span id="speedValue">255</span>
+    </div>
+    <button id="clearCalibration">Clear Calibration</button>
+    <div id="status">Status: Idle</div>
+    <script>
+      let bluetoothDevice, bleCharacteristic;
+
+      // Connect to ESP32 via Bluetooth
+      document.getElementById("connect").addEventListener("click", async () => {
+        try {
+          bluetoothDevice = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: ["12345678-1234-5678-1234-56789abcdef0"],
+          });
+          const server = await bluetoothDevice.gatt.connect();
+          const service = await server.getPrimaryService(
+            "12345678-1234-5678-1234-56789abcdef0"
+          );
+          bleCharacteristic = await service.getCharacteristic(
+            "abcdef01-1234-5678-1234-56789abcdef0"
+          );
+          document.getElementById("status").textContent = "Status: Connected";
+          console.log("Connected to ESP32 BLE");
+        } catch (error) {
+          console.error("Bluetooth Connection Failed", error);
+        }
+      });
+      // Speed control
+      document
+        .getElementById("speedSlider")
+        .addEventListener("input", (event) => {
+          const speed = event.target.value;
+          document.getElementById("speedValue").textContent = speed;
+          sendCommand(`V${speed}`); // Send speed command to ESP32
+        });
+
+      // Send command to ESP32
+      function sendCommand(command) {
+        if (bleCharacteristic) {
+          let data = new TextEncoder().encode(command);
+          bleCharacteristic.writeValue(data);
+        }
+      }
+
+      let gazeStartTime = null;
+      let currentButton = null;
+      let eyesClosedStartTime = null;
+      let isEyesClosed = false;
+
+      window.onload = async function () {
+        localStorage.clear(); // Clear previous gaze data
+        await webgazer
+          .setGazeListener((data, timestamp) => {
+            const statusElement = document.getElementById("status");
+            if (data === null || data.x === null || data.y === null) {
+              if (!eyesClosedStartTime) {
+                eyesClosedStartTime = timestamp;
+              } else if (
+                timestamp - eyesClosedStartTime > 1000 &&
+                !isEyesClosed
+              ) {
+                statusElement.textContent = "Status: Eyes Closed - Stopping";
+                isEyesClosed = true;
+                sendCommand("S"); // Stop the car when eyes are closed
+              }
+              return;
+            }
+            if (isEyesClosed) {
+              statusElement.textContent = "Status: Eyes Open";
+              isEyesClosed = false;
+              eyesClosedStartTime = null;
+            }
+            const x = data.x;
+            const y = data.y;
+            const buttons = document.querySelectorAll(".button");
+            let buttonUnderGaze = null;
+            buttons.forEach((button) => {
+              const rect = button.getBoundingClientRect();
+              if (
+                x >= rect.left &&
+                x <= rect.right &&
+                y >= rect.top &&
+                y <= rect.bottom
+              ) {
+                buttonUnderGaze = button;
+              }
+            });
+            if (buttonUnderGaze) {
+              if (currentButton === buttonUnderGaze) {
+                if (!gazeStartTime) gazeStartTime = timestamp;
+                if (timestamp - gazeStartTime >= 1000) {
+                  const command = buttonUnderGaze.id[0].toUpperCase(); // Extract first letter of button ID (F, B, L, R)
+                  statusElement.textContent = `Status: Activating "${buttonUnderGaze.textContent}"`;
+                  sendCommand(command); // Send command to ESP32
+                  gazeStartTime = null;
+                }
+              } else {
+                currentButton = buttonUnderGaze;
+                gazeStartTime = timestamp;
+              }
+              buttons.forEach((btn) => btn.classList.remove("highlight"));
+              buttonUnderGaze.classList.add("highlight");
+            } else {
+              currentButton = null;
+              gazeStartTime = null;
+              buttons.forEach((btn) => btn.classList.remove("highlight"));
+              statusElement.textContent = "Status: Idle";
+              sendCommand("S"); // Send stop signal when idle
+            }
+          })
+          .begin();
+        console.log("WebGazer initialized");
+
+        // Clear calibration data
+        document
+          .getElementById("clearCalibration")
+          .addEventListener("click", () => {
+            webgazer.clearData();
+            alert("Calibration data cleared!");
+          });
+      };
+    </script>
+  </body>
+</html>

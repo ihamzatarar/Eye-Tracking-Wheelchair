@@ -1,0 +1,136 @@
+body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+    overflow: hidden;
+    position: relative;
+}
+
+.button {
+    position: absolute;
+    width: 200px; /* Increase size */
+    height: 200px;
+    text-align: center;
+    font-size: 60px; /* Increase arrow size */
+    font-weight: bold;
+    border-radius: 15px; /* Slightly rounded corners */
+    color: white;
+    background-color: #007bff;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.button:hover, .button.highlight {
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+}
+
+/* Positioning the buttons */
+#forward {
+    top: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#backward {
+    bottom: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#left {
+    left: 10%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+#right {
+    right: 10%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Adding respective arrows */
+#forward::before {
+    content: "↑";
+}
+
+#backward::before {
+    content: "↓";
+}
+
+#left::before {
+    content: "←";
+}
+
+#right::before {
+    content: "→";
+}
+
+
+#connect, #clearCalibration {
+    position: absolute;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    color: white;
+}
+
+#connect {
+    top: 50px;
+    right: 10px;
+    background-color: #28a745;
+}
+
+#clearCalibration {
+    top: 10px;
+    right: 10px;
+    background-color: #ff4d4d;
+}
+
+#speedControl {
+    position: absolute;
+    top: 100px;
+    right: 10px;
+}
+
+#status {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 16px;
+    font-weight: bold;
+    color: #333;
+}
+
+#webgazerGazeDot {
+    width: 50px !important; /* Adjust the size */
+    height: 50px !important;
+    background-color: red !important; /* Change color if needed */
+    border-radius: 50%;
+}
+
+
+.calibration-button {
+    position: absolute;
+    top: 150px;
+    right: 10px;
+    padding: 10px 15px;
+    background-color: #ffc107;
+    color: black;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+  
+  
+

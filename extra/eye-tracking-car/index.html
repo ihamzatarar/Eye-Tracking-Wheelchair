@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <title>Eye-Controlled ESP32 Car</title>
+  </head>
+  <body>
+    <div id="control-area">
+      <div id="forward" class="button">Forward</div>
+      <div id="backward" class="button">Backward</div>
+      <div id="left" class="button">Left</div>
+      <div id="right" class="button">Right</div>
+    </div>
+
+    <div id="control-panel">
+      <button id="connect">Connect to ESP32</button>
+      <button id="calibrate" class="calibration-button">Calibrate</button>
+
+      <div id="speedControl">
+        <label for="speedSlider">Speed: </label>
+        <input type="range" id="speedSlider" min="0" max="255" value="180" />
+        <span id="speedValue">180</span>
+      </div>
+
+      <button id="clearCalibration">Clear Calibration</button>
+    </div>
+
+    <div id="status">Status: Idle</div>
+    <div id="debug">Debug: No commands sent yet</div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
