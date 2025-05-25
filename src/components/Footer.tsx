@@ -1,7 +1,6 @@
 import React from 'react';
-import { Eye, Github, Twitter, Linkedin } from 'lucide-react';
+import { Eye, Github, Linkedin } from 'lucide-react';
 import { Button } from './ui/button';
-import { cn } from '../lib/utils';
 
 const Footer: React.FC = () => {
   return (
@@ -15,18 +14,23 @@ const Footer: React.FC = () => {
           
           <div className="flex space-x-6">
             <Button variant="ghost" size="icon" asChild>
-              <a href="#" className="hover:text-primary transition-colors duration-200">
+              <a href="https://github.com/ihamzatarar" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors duration-200">
                 <Github className="h-5 w-5" />
               </a>
             </Button>
             <Button variant="ghost" size="icon" asChild>
-              <a href="#" className="hover:text-primary transition-colors duration-200">
-                <Twitter className="h-5 w-5" />
+              <a href="https://x.com/ihamzatarar" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors duration-200">
+                <span className="font-bold text-lg">X</span>
               </a>
             </Button>
             <Button variant="ghost" size="icon" asChild>
-              <a href="#" className="hover:text-primary transition-colors duration-200">
+              <a href="https://www.linkedin.com/in/hamza-tarar/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors duration-200">
                 <Linkedin className="h-5 w-5" />
+              </a>
+            </Button>
+            <Button variant="ghost" size="icon" asChild>
+              <a href="https://ihamzatarar.github.io/portfolio/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors duration-200">
+                <span className="font-bold text-lg">P</span>
               </a>
             </Button>
           </div>
@@ -43,32 +47,27 @@ const Footer: React.FC = () => {
           
           <div>
             <h3 className="text-foreground font-semibold mb-4">Contact</h3>
-            <p className="text-sm mb-2">Email: info@gazewheel.com</p>
-            <p className="text-sm mb-2">Phone: +1 (555) 123-4567</p>
-            <p className="text-sm">Address: 123 Innovation Lane, Tech City</p>
+            <p className="text-sm mb-2">Email: <a href="mailto:ihamzatarar@gmail.com" className="underline hover:text-primary">ihamzatarar@gmail.com</a></p>
+            <p className="text-sm mb-2">Address: Forman Christian College, Ferozepur Road, Lahore 54600</p>
+            <p className="text-sm mb-2">Phone: +92 325 5525557</p>
           </div>
           
           <div>
             <h3 className="text-foreground font-semibold mb-4">Support</h3>
             <ul className="text-sm space-y-2">
               <li>
-                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary">
-                  Help Center
+                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary" asChild>
+                  <a href="mailto:ihamzatarar@gmail.com?subject=Help%20Center%20Inquiry">Help Center</a>
                 </Button>
               </li>
               <li>
-                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary">
-                  Documentation
+                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary" asChild>
+                  <a href="/documentation" target="_blank" rel="noopener noreferrer">Documentation</a>
                 </Button>
               </li>
               <li>
-                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary">
-                  Terms of Service
-                </Button>
-              </li>
-              <li>
-                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary">
-                  Privacy Policy
+                <Button variant="link" className="p-0 h-auto text-muted-foreground hover:text-primary" asChild>
+                  <a href="/privacy-policy">Privacy Policy</a>
                 </Button>
               </li>
             </ul>

@@ -45,61 +45,61 @@ const WelcomePage: React.FC = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-background">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-16">How GazeWheel Works</h2>
+          <h2 className="text-3xl font-bold text-center mb-16 dark:text-white">How GazeWheel Works</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2 bg-card dark:bg-card">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-200 mb-4">
                     <Eye className="h-8 w-8" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">Eye Tracking</h3>
-                  <p className="text-gray-600">
+                  <h3 className="text-xl font-semibold mb-3 dark:text-white">Eye Tracking</h3>
+                  <p className="text-gray-600 dark:text-gray-300">
                     Advanced cameras capture your eye movements with precision, allowing for intuitive control.
                   </p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2 bg-card dark:bg-card">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-200 mb-4">
                     <Sliders className="h-8 w-8" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">Smart Calibration</h3>
-                  <p className="text-gray-600">
+                  <h3 className="text-xl font-semibold mb-3 dark:text-white">Smart Calibration</h3>
+                  <p className="text-gray-600 dark:text-gray-300">
                     Our system adapts to your unique eye movements for personalized control.
                   </p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2 bg-card dark:bg-card">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-200 mb-4">
                     <Bluetooth className="h-8 w-8" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">Wireless Connection</h3>
-                  <p className="text-gray-600">
+                  <h3 className="text-xl font-semibold mb-3 dark:text-white">Wireless Connection</h3>
+                  <p className="text-gray-600 dark:text-gray-300">
                     Seamlessly connect to your wheelchair via Bluetooth for instant control.
                   </p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2 bg-card dark:bg-card">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-200 mb-4">
                     <Gauge className="h-8 w-8" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">Speed Control</h3>
-                  <p className="text-gray-600">
+                  <h3 className="text-xl font-semibold mb-3 dark:text-white">Speed Control</h3>
+                  <p className="text-gray-600 dark:text-gray-300">
                     Easily adjust speed settings to match your comfort level and environment.
                   </p>
                 </div>
@@ -110,15 +110,15 @@ const WelcomePage: React.FC = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-background">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl font-bold mb-6">Ready to Get Started?</h2>
-            <p className="text-lg text-gray-600 mb-8">
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Ready to Get Started?</h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
               Follow our simple setup process to start experiencing the freedom of gaze-controlled mobility.
             </p>
             
-            <Card>
+            <Card className="bg-card dark:bg-card">
               <CardContent className="pt-6">
                 <ol className="space-y-4">
                   {[

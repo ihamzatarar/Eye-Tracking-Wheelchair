@@ -55,13 +55,11 @@ const Navbar: React.FC = () => {
             <span>GazeWheel</span>
           </NavLink>
 
-          <div className="flex items-center space-x-4">
-            <ThemeToggle />
+          <div className="flex items-center space-x-4 md:hidden">
             <Button 
               variant="ghost"
               size="icon"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden"
               aria-label="Toggle menu"
             >
               {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -92,6 +90,9 @@ const Navbar: React.FC = () => {
                 </motion.div>
               </NavLink>
             ))}
+            <div className="flex items-center ml-6">
+              <ThemeToggle />
+            </div>
           </nav>
         </div>
       </div>
@@ -129,6 +130,9 @@ const Navbar: React.FC = () => {
               </motion.div>
             </NavLink>
           ))}
+          <div className="flex items-center mt-4">
+            <ThemeToggle />
+          </div>
         </nav>
       </motion.div>
     </ResizableNavbar>

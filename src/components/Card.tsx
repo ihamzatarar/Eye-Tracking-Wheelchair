@@ -14,7 +14,7 @@ const Card: React.FC<CardProps> = ({
   headerActions
 }) => {
   return (
-    <div className={`bg-white rounded-xl shadow-sm overflow-hidden ${className}`}>
+    <div className={`rounded-xl shadow-sm overflow-hidden ${className}`}>
       {(title || headerActions) && (
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
           {title && <h3 className="text-lg font-semibold text-gray-900">{title}</h3>}

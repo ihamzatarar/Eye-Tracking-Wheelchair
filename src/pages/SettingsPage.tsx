@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gauge } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Slider } from '../components/ui/slider';
+import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "../components/ui/alert-dialog";
 
 type CameraFacingMode = 'user' | 'environment' | 'unknown';
 
@@ -31,10 +46,19 @@ const SettingsPage: React.FC = () => {
   const [selectedBackCamera, setSelectedBackCamera] = useState<string>('');
   const [isDetectingCameras, setIsDetectingCameras] = useState(false);
   const [wheelchairSettings, setWheelchairSettings] = useState<WheelchairSettings>(DEFAULT_WHEELCHAIR_SETTINGS);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [alertType, setAlertType] = useState<'success' | 'destructive' | null>(null);
 
   useEffect(() => {
     loadSavedSettings();
   }, []);
+
+  useEffect(() => {
+    if (alertMessage) {
+      const timeout = setTimeout(() => setAlertMessage(null), 4000);
+      return () => clearTimeout(timeout);
+    }
+  }, [alertMessage]);
 
   const loadCameras = async () => {
     setIsDetectingCameras(true);
@@ -98,15 +122,14 @@ const SettingsPage: React.FC = () => {
     localStorage.setItem('frontCameraId', selectedFrontCamera);
     localStorage.setItem('backCameraId', selectedBackCamera);
     localStorage.setItem('wheelchairSettings', JSON.stringify(wheelchairSettings));
-    alert('Settings saved successfully!');
+    setAlertMessage('Settings saved successfully!');
+    setAlertType('success');
   };
 
-  const clearCalibration = () => {
-    if (window.confirm('Are you sure you want to clear all calibration data? This action cannot be undone.')) {
-      localStorage.removeItem('calibrationData');
-      // Add any other calibration-related data that needs to be cleared
-      alert('Calibration data has been cleared successfully.');
-    }
+  const handleClearCalibration = () => {
+    localStorage.removeItem('calibrationData');
+    setAlertMessage('Calibration data has been cleared successfully.');
+    setAlertType('success');
   };
 
   const handleWheelchairSettingChange = (
@@ -120,129 +143,66 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background pt-20 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
-            
+        <Card className="border border-[hsl(var(--border))] shadow">
+          <CardHeader>
+            <CardTitle className="text-2xl mb-2">Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {alertMessage && (
+              <Alert variant={alertType === 'destructive' ? 'destructive' : 'default'} className="mb-4">
+                <AlertTitle>{alertType === 'destructive' ? 'Error' : 'Success'}</AlertTitle>
+                <AlertDescription>{alertMessage}</AlertDescription>
+              </Alert>
+            )}
             {/* Wheelchair Speed Settings Section */}
             <div className="mb-8">
-              <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+              <h2 className="text-lg font-medium mb-4 flex items-center">
                 <Gauge size={20} className="mr-2" />
                 Wheelchair Speed Settings
               </h2>
-              
               {/* Default Speed */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium mb-2">
                   Default Speed ({wheelchairSettings.defaultSpeed}%)
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={wheelchairSettings.defaultSpeed}
-                  onChange={(e) => handleWheelchairSettingChange('defaultSpeed', parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                <Slider
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={[wheelchairSettings.defaultSpeed]}
+                  onValueChange={([v]) => handleWheelchairSettingChange('defaultSpeed', v)}
                 />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>Slow</span>
                   <span>Fast</span>
                 </div>
               </div>
-
-              {/* Max Speed */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Maximum Speed ({wheelchairSettings.maxSpeed}%)
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={wheelchairSettings.maxSpeed}
-                  onChange={(e) => handleWheelchairSettingChange('maxSpeed', parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>Slow</span>
-                  <span>Fast</span>
-                </div>
-              </div>
-
-              {/* Acceleration Rate */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Acceleration Rate ({wheelchairSettings.accelerationRate}% per second)
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  step="1"
-                  value={wheelchairSettings.accelerationRate}
-                  onChange={(e) => handleWheelchairSettingChange('accelerationRate', parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>Gradual</span>
-                  <span>Quick</span>
-                </div>
-              </div>
-
-              {/* Deceleration Rate */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Deceleration Rate ({wheelchairSettings.decelerationRate}% per second)
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="20"
-                  step="1"
-                  value={wheelchairSettings.decelerationRate}
-                  onChange={(e) => handleWheelchairSettingChange('decelerationRate', parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>Gradual</span>
-                  <span>Quick</span>
-                </div>
-              </div>
-
               {/* Speed Presets */}
               <div className="grid grid-cols-3 gap-2 mt-4">
                 {[25, 50, 75].map(presetSpeed => (
-                  <button
+                  <Button
                     key={presetSpeed}
+                    variant={wheelchairSettings.defaultSpeed === presetSpeed ? 'default' : 'outline'}
                     onClick={() => handleWheelchairSettingChange('defaultSpeed', presetSpeed)}
-                    className={`py-2 px-3 rounded border text-sm font-medium transition-colors
-                      ${wheelchairSettings.defaultSpeed === presetSpeed 
-                        ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                    className="w-full"
                   >
                     {presetSpeed}%
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
-
             {/* Camera Settings Section */}
             <div className="mb-8">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Camera Settings</h2>
-              
+              <h2 className="text-lg font-medium mb-4">Camera Settings</h2>
               {/* Detect Cameras Button */}
               <div className="mb-6">
-                <button
+                <Button
                   onClick={loadCameras}
                   disabled={isDetectingCameras}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white 
-                    ${isDetectingCameras 
-                      ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'}`}
+                  variant="default"
+                  className="inline-flex items-center"
                 >
                   {isDetectingCameras ? (
                     <>
@@ -255,33 +215,32 @@ const SettingsPage: React.FC = () => {
                   ) : (
                     'Detect Cameras'
                   )}
-                </button>
+                </Button>
                 {cameras.length > 0 && (
-                  <span className="ml-3 text-sm text-gray-500">
+                  <span className="ml-3 text-sm text-muted-foreground">
                     {cameras.length} camera{cameras.length !== 1 ? 's' : ''} detected
                   </span>
                 )}
               </div>
-              
               {/* Front Camera Selection */}
               <div className="mb-4">
-                <label htmlFor="frontCamera" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="frontCamera" className="block text-sm font-medium mb-2">
                   Front Camera (for Gaze Tracking)
                 </label>
                 {cameras.length === 1 ? (
-                  <div className="mt-1 p-2 bg-blue-50 rounded-md border border-blue-200">
-                    <p className="text-sm text-blue-700">
-                      Using the only available camera: {cameras[0].label} ({cameras[0].facingMode})
-                    </p>
-                  </div>
+                  <Alert className="mt-1">
+                    <AlertTitle>Using the only available camera</AlertTitle>
+                    <AlertDescription>
+                      {cameras[0].label} ({cameras[0].facingMode})
+                    </AlertDescription>
+                  </Alert>
                 ) : (
                   <select
                     id="frontCamera"
                     value={selectedFrontCamera}
                     onChange={(e) => setSelectedFrontCamera(e.target.value)}
                     disabled={cameras.length === 0}
-                    className={`mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md
-                      ${cameras.length === 0 ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md bg-background text-foreground border-input focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm"
                   >
                     <option value="">Select a camera</option>
                     {cameras.map((camera) => (
@@ -292,23 +251,25 @@ const SettingsPage: React.FC = () => {
                   </select>
                 )}
                 {cameras.length === 0 && (
-                  <p className="mt-1 text-sm text-gray-500">
-                    Click "Detect Cameras" to find available cameras
-                  </p>
+                  <Alert className="mt-1">
+                    <AlertTitle>No cameras detected</AlertTitle>
+                    <AlertDescription>
+                      Click "Detect Cameras" to find available cameras
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
-
               {/* Back Camera Selection - Only show if more than one camera is available */}
               {cameras.length > 1 && (
                 <div className="mb-4">
-                  <label htmlFor="backCamera" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="backCamera" className="block text-sm font-medium mb-2">
                     Back Camera
                   </label>
                   <select
                     id="backCamera"
                     value={selectedBackCamera}
                     onChange={(e) => setSelectedBackCamera(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md bg-background text-foreground border-input focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm"
                   >
                     <option value="">Select a camera</option>
                     {cameras.map((camera) => (
@@ -319,47 +280,50 @@ const SettingsPage: React.FC = () => {
                   </select>
                 </div>
               )}
-
-              <button
+              <Button
                 onClick={saveSettings}
                 disabled={cameras.length === 0}
-                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white
-                  ${cameras.length === 0 
-                    ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'}`}
+                variant="default"
+                className="mt-2"
               >
                 Save Camera Settings
-              </button>
+              </Button>
             </div>
-
             {/* Calibration Settings Section */}
             <div className="mb-8">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Calibration Settings</h2>
-              <button
-                onClick={clearCalibration}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                Clear Calibration Data
-              </button>
+              <h2 className="text-lg font-medium mb-4">Calibration Settings</h2>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">
+                    Clear Calibration Data
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete all calibration data.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearCalibration} autoFocus>Yes, clear it</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
-
             {/* Save Button */}
-            <div className="flex justify-between mt-8">
-              <button
-                onClick={() => navigate(-1)}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Back
-              </button>
-              <button
+            <div className="flex justify-end mt-8">
+              <Button
                 onClick={saveSettings}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                variant="default"
+                className="ml-2"
               >
                 Save All Settings
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

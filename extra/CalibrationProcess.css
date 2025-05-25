@@ -1,0 +1,91 @@
+.calibration-process-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  background: #f8f9fa;
+}
+
+.calibration-navbar {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem 2rem 1rem 2rem;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  margin-bottom: 2rem;
+}
+
+.back-btn, .clear-btn {
+  font-size: 1.1rem;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  background: #e9ecef;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.back-btn:hover {
+  background: #d0ebff;
+}
+
+.clear-btn {
+  margin-left: 0.5rem;
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+.clear-btn:hover {
+  background: #ffa8a8;
+}
+
+.calibration-points-container {
+  display: grid;
+  grid-template-columns: repeat(3, 90px);
+  grid-template-rows: repeat(3, 90px);
+  gap: 2.5rem;
+  margin-top: 3rem;
+}
+
+.calibration-point {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: #fa5252;
+  color: #fff;
+  font-size: 2rem;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.calibration-point:active {
+  transform: scale(0.96);
+}
+
+.calibration-point.calibrated {
+  background: #fab005;
+  color: #222;
+  cursor: default;
+}
+
+@media (max-width: 600px) {
+  .calibration-points-container {
+    gap: 1.2rem;
+    grid-template-columns: repeat(3, 60px);
+    grid-template-rows: repeat(3, 60px);
+  }
+  .calibration-point {
+    width: 45px;
+    height: 45px;
+    font-size: 1.2rem;
+  }
+} 

@@ -21,7 +21,7 @@ const GazeTrackingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="h-full">
+            <Card className="h-full bg-card dark:bg-card border border-[hsl(var(--border))]">
               <div className="p-6 text-center">
                 <div className="mb-6">
                   <Eye size={64} className="mx-auto text-blue-600 mb-4" />
@@ -41,13 +41,13 @@ const GazeTrackingPage: React.FC = () => {
               </div>
             </Card>
 
-            <Card className="bg-yellow-50 border border-yellow-100">
+            <Card className="bg-card dark:bg-card border border-[hsl(var(--border))]">
               <div className="space-y-4 p-6">
-                <h3 className="font-semibold text-yellow-800">Safety Reminder</h3>
-                <p className="text-sm text-yellow-700">
+                <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">Safety Reminder</h3>
+                <p className="text-sm text-yellow-700 dark:text-yellow-100">
                   Always ensure a clear path when operating the wheelchair. Use the pause button or look at the center area to stop immediately if needed.
                 </p>
-                <p className="text-sm text-yellow-700">
+                <p className="text-sm text-yellow-700 dark:text-yellow-100">
                   For emergency situations, use the physical emergency stop button on the wheelchair.
                 </p>
               </div>

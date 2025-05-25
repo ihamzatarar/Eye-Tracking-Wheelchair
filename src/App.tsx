@@ -12,6 +12,8 @@ const GazeTrackingPage = React.lazy(() => import('./pages/GazeTrackingPage'));
 const WheelchairControlPage = React.lazy(() => import('./pages/WheelchairControlPage'));
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage'));
+const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
+const PrivacyPolicyPage = React.lazy(() => import('./pages/PrivacyPolicyPage'));
 
 // Loading component
 const LoadingFallback = () => <div>Loading...</div>;
@@ -35,6 +37,8 @@ const App: React.FC = () => {
             {/* Routes without Layout */}
             <Route path="calibration/process" element={<CalibrationProcessPage />} />
             <Route path="wheelchair-control" element={<WheelchairControlPage />} />
+            <Route path="/documentation" element={<DocumentationPage />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           </Routes>
         </Suspense>
       </Router>
