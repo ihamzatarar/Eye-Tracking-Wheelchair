@@ -3,9 +3,9 @@ import { Skeleton } from "./ui/skeleton";
 
 const LoadingScreen: React.FC = () => {
   return (
-    <div className="min-h-screen bg-white dark:bg-background">
+    <div className="min-h-screen bg-white dark:bg-background text-gray-900 dark:text-gray-100">
       {/* Navbar Skeleton */}
-      <nav className="border-b border-gray-100 dark:border-border px-6 py-4">
+      <nav className="border-b border-gray-100 dark:border-border px-6 py-4 bg-white dark:bg-background">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo */}
           <Skeleton className="h-8 w-32" />
@@ -27,7 +27,7 @@ const LoadingScreen: React.FC = () => {
       </nav>
 
       {/* Hero Section Skeleton */}
-      <section className="px-6 py-20">
+      <section className="px-6 py-20 bg-white dark:bg-background">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           {/* Hero Heading */}
           <div className="space-y-4">
@@ -82,7 +82,7 @@ const LoadingScreen: React.FC = () => {
       </section>
 
       {/* Stats Section Skeleton */}
-      <section className="px-6 py-16">
+      <section className="px-6 py-16 bg-white dark:bg-background">
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {[...Array(4)].map((_, i) => (

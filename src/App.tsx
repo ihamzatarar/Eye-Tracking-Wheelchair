@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { BluetoothProvider } from './context/BluetoothContext';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
+import { useTheme } from './utils/theme';
 
 // Lazy load all pages
 const WelcomePage = React.lazy(() => import('./pages/WelcomePage'));
@@ -20,6 +21,7 @@ const PrivacyPolicyPage = React.lazy(() => import('./pages/PrivacyPolicyPage'));
 const LoadingFallback = () => <LoadingScreen />;
 
 const App: React.FC = () => {
+  useTheme();
   return (
     <BluetoothProvider>
       <Router>
