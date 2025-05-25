@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bluetooth, RefreshCw, Search, ArrowRight, Shield, Wifi, AlertCircle } from 'lucide-react';
-import Button from '../components/Button';
-import Card from '../components/Card';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "../lib/utils";
 import ConnectionStatus from '../components/ConnectionStatus';
+import { useBluetooth } from '../context/BluetoothContext';
 
 // Define our service and characteristic UUIDs (matching the eye-tracking car)
 const SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0";
@@ -25,13 +30,22 @@ interface Device {
 
 const BluetoothPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isConnected, bleDevice, bleCharacteristic, setConnectionState } = useBluetooth();
   const [isScanning, setIsScanning] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [devices, setDevices] = useState<Device[]>([]);
   const [connectedDevice, setConnectedDevice] = useState<Device | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState<number>(0);
-  const [bleCharacteristic, setBleCharacteristic] = useState<BluetoothRemoteGATTCharacteristic | null>(null);
+
+  // Update connection status based on context
+  useEffect(() => {
+    if (isConnected && bleDevice && bleCharacteristic) {
+      setConnectionStatus('connected');
+    } else {
+      setConnectionStatus('disconnected');
+    }
+  }, [isConnected, bleDevice, bleCharacteristic]);
 
   const scanForDevices = async () => {
     setIsScanning(true);
@@ -80,7 +94,8 @@ const BluetoothPage: React.FC = () => {
       const service = await server.getPrimaryService(SERVICE_UUID);
       const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
       
-      setBleCharacteristic(characteristic);
+      // Update the shared context
+      setConnectionState(device.device, characteristic);
       setConnectionStatus('connected');
       setConnectedDevice(device);
       
@@ -99,19 +114,22 @@ const BluetoothPage: React.FC = () => {
   };
 
   const disconnectDevice = async () => {
-    if (connectedDevice?.device?.gatt?.connected) {
+    if (bleDevice?.gatt?.connected) {
       try {
         // Send stop command before disconnecting
-        await sendCommand('S');
-        await connectedDevice.device.gatt?.disconnect();
+        if (bleCharacteristic) {
+          const data = new TextEncoder().encode('S');
+          await bleCharacteristic.writeValue(data);
+        }
+        await bleDevice.gatt?.disconnect();
       } catch (error) {
         console.error('Disconnect error:', error);
       }
     }
     
+    setConnectionState(null, null);
     setConnectionStatus('disconnected');
     setConnectedDevice(null);
-    setBleCharacteristic(null);
     setSpeed(0);
     
     // Update the device's paired status
@@ -157,18 +175,20 @@ const BluetoothPage: React.FC = () => {
   }, [bleCharacteristic]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 pb-16">
+    <div className="min-h-screen bg-background pt-20 pb-16">
       <div className="container mx-auto px-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Bluetooth Connection</h1>
-              <p className="text-gray-600">
+              <h1 className="text-4xl font-bold text-foreground mb-2">Bluetooth Connection</h1>
+              <p className="text-muted-foreground">
                 Connect to your wheelchair using Web Bluetooth for wireless control
               </p>
             </div>
-            <div className="flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm">
-              <Bluetooth size={24} className={`${connectionStatus === 'connected' ? 'text-blue-600' : 'text-gray-400'}`} />
+            <div className="flex items-center space-x-2 bg-card px-4 py-2 rounded-full shadow-sm">
+              <Bluetooth size={24} className={cn(
+                connectionStatus === 'connected' ? 'text-primary' : 'text-muted-foreground'
+              )} />
               <span className="text-sm font-medium">
                 {connectionStatus === 'connected' ? 'Web Bluetooth Active' : 'Web Bluetooth Ready'}
               </span>
@@ -177,26 +197,26 @@ const BluetoothPage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
-              <Card className="bg-white shadow-lg">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold text-gray-900">Available Devices</h2>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Available Devices</CardTitle>
                     <div className="flex space-x-3">
                       <Button 
                         variant="outline" 
-                        size="small"
+                        size="sm"
                         onClick={scanForDevices}
                         disabled={isScanning}
                         className="flex items-center space-x-2"
                       >
-                        <RefreshCw size={16} className={isScanning ? 'animate-spin' : ''} />
+                        <RefreshCw size={16} className={cn(isScanning && 'animate-spin')} />
                         <span>{isScanning ? 'Scanning...' : 'Scan'}</span>
                       </Button>
                       
                       {connectionStatus === 'connected' && (
                         <Button
-                          variant="danger"
-                          size="small"
+                          variant="destructive"
+                          size="sm"
                           onClick={disconnectDevice}
                           className="flex items-center space-x-2"
                         >
@@ -206,88 +226,84 @@ const BluetoothPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-
+                </CardHeader>
+                <CardContent>
                   {error && (
-                    <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                      <div className="flex items-start">
-                        <AlertCircle size={20} className="text-red-500 mt-0.5" />
-                        <div className="ml-3">
-                          <p className="text-sm font-medium text-red-800">{error}</p>
-                        </div>
-                      </div>
-                    </div>
+                    <Alert variant="destructive" className="mb-6">
+                      <AlertCircle size={20} className="mt-0.5" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                   )}
 
                   {/* Speed Control - Only visible when connected */}
                   {connectionStatus === 'connected' && (
-                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="mb-6 p-4 bg-muted rounded-lg">
                       <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="speedSlider" className="text-sm font-medium text-blue-900">
+                        <label htmlFor="speedSlider" className="text-sm font-medium">
                           Speed Control
                         </label>
-                        <span className="text-sm font-semibold text-blue-900">{speed}%</span>
+                        <span className="text-sm font-semibold">{speed}%</span>
                       </div>
-                      <input
-                        type="range"
+                      <Slider
                         id="speedSlider"
-                        min="0"
-                        max="100"
-                        value={speed}
-                        onChange={(e) => handleSpeedChange(parseInt(e.target.value))}
-                        className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        min={0}
+                        max={100}
+                        value={[speed]}
+                        onValueChange={(value) => handleSpeedChange(value[0])}
+                        className="w-full"
                       />
                     </div>
                   )}
 
                   {isScanning ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-gray-500 bg-gray-50 rounded-lg">
-                      <Search size={40} className="mb-3 animate-pulse text-blue-500" />
+                    <div className="py-12 flex flex-col items-center justify-center text-muted-foreground bg-muted/50 rounded-lg">
+                      <Search size={40} className="mb-3 animate-pulse text-primary" />
                       <p className="text-sm font-medium">Scanning for nearby devices...</p>
-                      <p className="text-xs text-gray-400 mt-1">This may take a few moments</p>
+                      <p className="text-xs text-muted-foreground mt-1">This may take a few moments</p>
                     </div>
                   ) : devices.length === 0 ? (
-                    <div className="py-12 text-center bg-gray-50 rounded-lg">
-                      <Bluetooth size={40} className="mx-auto mb-3 text-gray-400" />
-                      <p className="text-sm font-medium text-gray-600">No devices found</p>
-                      <p className="text-xs text-gray-400 mt-1">Click "Scan" to search for nearby devices</p>
+                    <div className="py-12 text-center bg-muted/50 rounded-lg">
+                      <Bluetooth size={40} className="mx-auto mb-3 text-muted-foreground" />
+                      <p className="text-sm font-medium text-muted-foreground">No devices found</p>
+                      <p className="text-xs text-muted-foreground mt-1">Click "Scan" to search for nearby devices</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {devices.map(device => (
                         <div 
                           key={device.deviceId} 
-                          className={`p-4 rounded-lg border transition-colors ${
+                          className={cn(
+                            "p-4 rounded-lg border transition-colors",
                             connectedDevice?.deviceId === device.deviceId 
-                              ? 'bg-blue-50 border-blue-200' 
-                              : 'bg-white border-gray-200 hover:bg-gray-50'
-                          }`}
+                              ? 'bg-primary/10 border-primary/20' 
+                              : 'bg-card hover:bg-muted/50'
+                          )}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
-                              <div className={`p-2 rounded-full ${
+                              <div className={cn(
+                                "p-2 rounded-full",
                                 connectedDevice?.deviceId === device.deviceId 
-                                  ? 'bg-blue-100' 
-                                  : 'bg-gray-100'
-                              }`}>
-                                <Bluetooth size={20} className={
+                                  ? 'bg-primary/20' 
+                                  : 'bg-muted'
+                              )}>
+                                <Bluetooth size={20} className={cn(
                                   connectedDevice?.deviceId === device.deviceId 
-                                    ? 'text-blue-600' 
-                                    : 'text-gray-500'
-                                } />
+                                    ? 'text-primary' 
+                                    : 'text-muted-foreground'
+                                )} />
                               </div>
                               <div>
-                                <p className="font-medium text-gray-900">{device.name}</p>
-                                <p className="text-xs text-gray-500">ID: {device.deviceId.slice(0, 8)}...</p>
+                                <p className="font-medium">{device.name}</p>
+                                <p className="text-xs text-muted-foreground">ID: {device.deviceId.slice(0, 8)}...</p>
                               </div>
                             </div>
                             
                             {connectedDevice?.deviceId === device.deviceId ? (
-                              <span className="px-3 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-full">
-                                Connected
-                              </span>
+                              <Badge variant="success">Connected</Badge>
                             ) : (
                               <Button
-                                size="small"
+                                size="sm"
                                 onClick={() => connectToDevice(device)}
                                 disabled={connectionStatus === 'connecting'}
                                 className="flex items-center space-x-2"
@@ -301,14 +317,16 @@ const BluetoothPage: React.FC = () => {
                       ))}
                     </div>
                   )}
-                </div>
+                </CardContent>
               </Card>
             </div>
 
             <div className="space-y-6">
-              <Card className="bg-white shadow-lg">
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Connection Status</h2>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Connection Status</CardTitle>
+                </CardHeader>
+                <CardContent>
                   <ConnectionStatus 
                     status={connectionStatus} 
                     deviceName={connectedDevice?.name}
@@ -317,8 +335,8 @@ const BluetoothPage: React.FC = () => {
                   {connectionStatus === 'connected' && (
                     <div className="mt-6">
                       <Button 
-                        size="small" 
-                        className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700"
+                        size="sm" 
+                        className="w-full flex items-center justify-center space-x-2"
                         onClick={() => navigate('/gaze-tracking')}
                       >
                         <span>Continue to Control</span>
@@ -326,41 +344,45 @@ const BluetoothPage: React.FC = () => {
                       </Button>
                     </div>
                   )}
-                </div>
+                </CardContent>
               </Card>
 
-              <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Shield size={20} className="text-blue-600" />
-                  <h3 className="text-lg font-semibold text-gray-900">Web Bluetooth Guide</h3>
-                </div>
-                <ul className="space-y-3">
-                  <li className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-xs font-medium text-blue-600">1</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Ensure your browser supports Web Bluetooth (Chrome, Edge, or Opera)</p>
-                  </li>
-                  <li className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-xs font-medium text-blue-600">2</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Grant Bluetooth permissions when prompted by your browser</p>
-                  </li>
-                  <li className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-xs font-medium text-blue-600">3</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Keep the browser tab open to maintain the connection</p>
-                  </li>
-                  <li className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-xs font-medium text-blue-600">4</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Use HTTPS or localhost for Web Bluetooth to work</p>
-                  </li>
-                </ul>
-              </div>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center space-x-2">
+                    <Shield size={20} className="text-primary" />
+                    <CardTitle>Web Bluetooth Guide</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-3">
+                    <li className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-xs font-medium text-primary">1</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Ensure your browser supports Web Bluetooth (Chrome, Edge, or Opera)</p>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-xs font-medium text-primary">2</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Grant Bluetooth permissions when prompted by your browser</p>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-xs font-medium text-primary">3</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Keep the browser tab open to maintain the connection</p>
+                    </li>
+                    <li className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-xs font-medium text-primary">4</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Use HTTPS or localhost for Web Bluetooth to work</p>
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>

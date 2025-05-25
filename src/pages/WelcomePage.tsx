@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, Sliders, Bluetooth, Gauge } from 'lucide-react';
-import Button from '../components/Button';
-import Card from '../components/Card';
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -10,32 +10,36 @@ const WelcomePage: React.FC = () => {
   return (
     <div className="pt-16">
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
-        <div className="container mx-auto px-4 py-20 flex flex-col items-center text-center">
-          <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-            Control Your Mobility <br />With Just Your Eyes
-          </h1>
-          <p className="text-xl max-w-2xl mb-10 opacity-90">
-            GazeWheel enables independent movement through innovative gaze tracking technology, 
-            providing freedom and autonomy for individuals with limited mobility.
-          </p>
-          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <Button 
-              size="large" 
-              onClick={() => navigate('/calibration')}
-              icon={<Sliders size={20} />}
-            >
-              Start Calibration
-            </Button>
-            <Button 
-              variant="outline" 
-              size="large" 
-              className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-              onClick={() => navigate('/bluetooth')}
-              icon={<Bluetooth size={20} />}
-            >
-              Connect Wheelchair
-            </Button>
+      <section className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 text-white min-h-[80vh] flex items-center">
+        <div className="container mx-auto px-4 py-24 flex flex-col items-center text-center">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-8 leading-tight tracking-tight">
+              Control Your Mobility <br />
+              <span className="text-blue-200">With Just Your Eyes</span>
+            </h1>
+            <p className="text-xl md:text-2xl max-w-3xl mx-auto mb-12 text-blue-50 leading-relaxed">
+              GazeWheel enables independent movement through innovative gaze tracking technology, 
+              providing freedom and autonomy for individuals with limited mobility.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-6">
+              <Button 
+                size="lg" 
+                onClick={() => navigate('/calibration')}
+                className="gap-2 text-lg px-8 py-6 bg-white text-blue-700 hover:bg-blue-50 transition-all duration-300"
+              >
+                <Sliders className="h-6 w-6" />
+                Start Calibration
+              </Button>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="gap-2 text-lg px-8 py-6 bg-transparent text-white border-2 border-white/30 hover:bg-white/10 transition-all duration-300"
+                onClick={() => navigate('/bluetooth')}
+              >
+                <Bluetooth className="h-6 w-6" />
+                Connect Wheelchair
+              </Button>
+            </div>
           </div>
         </div>
       </section>
@@ -46,52 +50,60 @@ const WelcomePage: React.FC = () => {
           <h2 className="text-3xl font-bold text-center mb-16">How GazeWheel Works</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <Card className="border border-gray-100 transition-transform duration-300 hover:transform hover:-translate-y-2">
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
-                  <Eye size={32} />
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                    <Eye className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Eye Tracking</h3>
+                  <p className="text-gray-600">
+                    Advanced cameras capture your eye movements with precision, allowing for intuitive control.
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold mb-3">Eye Tracking</h3>
-                <p className="text-gray-600">
-                  Advanced cameras capture your eye movements with precision, allowing for intuitive control.
-                </p>
-              </div>
+              </CardContent>
             </Card>
             
-            <Card className="border border-gray-100 transition-transform duration-300 hover:transform hover:-translate-y-2">
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
-                  <Sliders size={32} />
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                    <Sliders className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Smart Calibration</h3>
+                  <p className="text-gray-600">
+                    Our system adapts to your unique eye movements for personalized control.
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold mb-3">Smart Calibration</h3>
-                <p className="text-gray-600">
-                  Our system adapts to your unique eye movements for personalized control.
-                </p>
-              </div>
+              </CardContent>
             </Card>
             
-            <Card className="border border-gray-100 transition-transform duration-300 hover:transform hover:-translate-y-2">
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
-                  <Bluetooth size={32} />
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                    <Bluetooth className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Wireless Connection</h3>
+                  <p className="text-gray-600">
+                    Seamlessly connect to your wheelchair via Bluetooth for instant control.
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold mb-3">Wireless Connection</h3>
-                <p className="text-gray-600">
-                  Seamlessly connect to your wheelchair via Bluetooth for instant control.
-                </p>
-              </div>
+              </CardContent>
             </Card>
             
-            <Card className="border border-gray-100 transition-transform duration-300 hover:transform hover:-translate-y-2">
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
-                  <Gauge size={32} />
+            <Card className="transition-transform duration-300 hover:transform hover:-translate-y-2">
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4">
+                    <Gauge className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Speed Control</h3>
+                  <p className="text-gray-600">
+                    Easily adjust speed settings to match your comfort level and environment.
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold mb-3">Speed Control</h3>
-                <p className="text-gray-600">
-                  Easily adjust speed settings to match your comfort level and environment.
-                </p>
-              </div>
+              </CardContent>
             </Card>
           </div>
         </div>
@@ -106,33 +118,36 @@ const WelcomePage: React.FC = () => {
               Follow our simple setup process to start experiencing the freedom of gaze-controlled mobility.
             </p>
             
-            <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-              <ol className="space-y-4">
-                {[
-                  { text: 'Calibrate the eye tracking system', path: '/calibration', icon: <Sliders size={18} /> },
-                  { text: 'Connect to your wheelchair via Bluetooth', path: '/bluetooth', icon: <Bluetooth size={18} /> },
-                  { text: 'Start controlling with your gaze', path: '/gaze-tracking', icon: <Gauge size={18} /> }
-                ].map((step, index) => (
-                  <li key={index} className="flex items-start">
-                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-3">
-                      {index + 1}
-                    </div>
-                    <div className="flex-grow pt-1">
-                      <p className="font-medium">{step.text}</p>
-                      <Button 
-                        variant="outline" 
-                        size="small" 
-                        className="mt-2"
-                        onClick={() => navigate(step.path)}
-                        icon={step.icon}
-                      >
-                        Go to Step <ChevronRight size={14} />
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
+            <Card>
+              <CardContent className="pt-6">
+                <ol className="space-y-4">
+                  {[
+                    { text: 'Calibrate the eye tracking system', path: '/calibration', icon: <Sliders className="h-4 w-4" /> },
+                    { text: 'Connect to your wheelchair via Bluetooth', path: '/bluetooth', icon: <Bluetooth className="h-4 w-4" /> },
+                    { text: 'Start controlling with your gaze', path: '/gaze-tracking', icon: <Gauge className="h-4 w-4" /> }
+                  ].map((step, index) => (
+                    <li key={index} className="flex items-start">
+                      <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-3">
+                        {index + 1}
+                      </div>
+                      <div className="flex-grow pt-1">
+                        <p className="font-medium">{step.text}</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-2 gap-2"
+                          onClick={() => navigate(step.path)}
+                        >
+                          {step.icon}
+                          Go to Step
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>

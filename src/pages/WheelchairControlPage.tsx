@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth } from 'lucide-react';
+import { useBluetooth } from '../context/BluetoothContext';
 import { useNavigate } from 'react-router-dom';
 
 interface GazeData {
@@ -11,9 +12,18 @@ interface GazeData {
 interface CustomWebGazer {
   begin: () => void;
   end: () => void;
-  setGazeListener: (callback: (data: GazeData | null) => void) => void;
+  setGazeListener: (callback: (data: GazeData | null, timestamp: number) => void) => void;
   showPredictionPoints: (show: boolean) => void;
   showVideo: (show: boolean) => void;
+  setCamera: (cameraId: string) => void;
+}
+
+interface WheelchairSettings {
+  maxSpeed: number;
+  defaultSpeed: number;
+  accelerationRate: number;
+  decelerationRate: number;
+  brakeTimeout: number;
 }
 
 declare global {
@@ -22,20 +32,162 @@ declare global {
   }
 }
 
+const ESP32_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0";
+const ESP32_CHARACTERISTIC_UUID = "abcdef01-1234-5678-1234-56789abcdef0";
+
 const WheelchairControlPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isConnected, bleCharacteristic } = useBluetooth();
   const [currentDirection, setCurrentDirection] = useState<string | null>(null);
-  const [isCalibrating, setIsCalibrating] = useState(true);
+  const [currentSpeed, setCurrentSpeed] = useState(50);
+  const [isBraking, setIsBraking] = useState(false);
   const webgazerStarted = useRef(false);
+  const webgazerScript = useRef<HTMLScriptElement | null>(null);
+  const backgroundVideoRef = useRef<HTMLVideoElement>(null);
+  const gazeStartTime = useRef<number | null>(null);
+  const currentButton = useRef<HTMLElement | null>(null);
+  const isConnectedRef = useRef(isConnected);
+  const bleCharacteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null);
+  const lastCommandTime = useRef<number>(Date.now());
+  const brakeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const BRAKE_TIMEOUT = 500;
 
+  // Update refs when context values change
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+    bleCharacteristicRef.current = bleCharacteristic;
+  }, [isConnected, bleCharacteristic]);
+
+  // Load wheelchair settings
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('wheelchairSettings');
+    if (savedSettings) {
+      const settings: WheelchairSettings = JSON.parse(savedSettings);
+      setCurrentSpeed(settings.defaultSpeed);
+    }
+  }, []);
+
+  // Send command to ESP32
+  const sendCommand = async (command: string) => {
+    if (!isConnected || !bleCharacteristicRef.current) {
+      console.log('Cannot send command - not connected');
+      return;
+    }
+    
+    try {
+      console.log('Sending BLE command:', command);
+      const data = new TextEncoder().encode(command);
+      await bleCharacteristicRef.current.writeValue(data);
+      console.log('Command sent successfully:', command);
+    } catch (error) {
+      console.error('Error sending command:', error);
+    }
+  };
+
+  // Update speed
+  const updateSpeed = (speed: number) => {
+    setCurrentSpeed(speed);
+    if (isConnected && bleCharacteristicRef.current) {
+      sendCommand(`V${speed}`);
+    }
+  };
+  
+  // Function to apply brakes
+  const applyBrakes = async () => {
+    if (!isConnected || !bleCharacteristicRef.current) return;
+
+    console.log('Applying brakes');
+    setIsBraking(true);
+    
+    try {
+      // Send brake command
+      const brakeEncoder = new TextEncoder();
+      await bleCharacteristicRef.current.writeValue(brakeEncoder.encode('S'));
+      
+      // Brief delay before full stop
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Send stop command
+      await bleCharacteristicRef.current.writeValue(brakeEncoder.encode('S'));
+      
+      setIsBraking(false);
+      setCurrentDirection(null);
+    } catch (error) {
+      console.error('Error applying brakes:', error);
+      setIsBraking(false);
+    }
+  };
+
+  // Process gaze commands
+  const processGazeCommand = (direction: string | null, timestamp: number) => {
+    if (!isConnected || !bleCharacteristicRef.current) {
+      console.log('Cannot process command - not connected');
+      return;
+    }
+
+    // Clear any existing brake timeout
+    if (brakeTimeoutRef.current) {
+      clearTimeout(brakeTimeoutRef.current);
+      brakeTimeoutRef.current = null;
+    }
+
+    // Process direction
+    if (direction) {
+      lastCommandTime.current = timestamp;
+
+      if (currentButton.current?.id !== direction) {
+        console.log('Direction changed from', currentButton.current?.id, 'to', direction);
+        currentButton.current = { id: direction } as HTMLElement;
+        gazeStartTime.current = timestamp;
+        return;
+      }
+
+      if (!gazeStartTime.current) {
+        gazeStartTime.current = timestamp;
+      }
+
+      const gazeDuration = timestamp - gazeStartTime.current;
+      
+      if (gazeDuration >= 1000) {
+        const commands: { [key: string]: string } = {
+          'forward': 'F',
+          'backward': 'B',
+          'left': 'L',
+          'right': 'R',
+          'stop': 'S'
+        };
+
+        const command = commands[direction] || 'S';
+        sendCommand(command);
+        
+        // Set brake timeout
+        brakeTimeoutRef.current = setTimeout(() => {
+          if (Date.now() - lastCommandTime.current >= BRAKE_TIMEOUT) {
+            applyBrakes();
+          }
+        }, BRAKE_TIMEOUT);
+
+        gazeStartTime.current = timestamp;
+      }
+    } else {
+      if (currentButton.current) {
+        console.log('Gaze moved away from button, applying brakes');
+        currentButton.current = null;
+        gazeStartTime.current = null;
+        applyBrakes();
+      }
+    }
+  };
+
+  // Initialize webgazer with gaze tracking
   useEffect(() => {
     const initializeWebGazer = async () => {
       try {
-        // Load webgazer script if not already loaded
         if (!window.customWebGazer) {
           const script = document.createElement('script');
           script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
           script.async = true;
+          webgazerScript.current = script;
           document.body.appendChild(script);
           
           await new Promise((resolve) => {
@@ -47,35 +199,40 @@ const WheelchairControlPage: React.FC = () => {
           });
         }
 
-        // Initialize webgazer
         if (window.customWebGazer && !webgazerStarted.current) {
-          window.customWebGazer.showPredictionPoints(true);
-          window.customWebGazer.showVideo(false);
+          const frontCameraId = localStorage.getItem('frontCameraId');
+          if (frontCameraId) {
+            window.customWebGazer.setCamera(frontCameraId);
+          }
           
-          const gazeListener = window.customWebGazer.setGazeListener((data: GazeData | null) => {
-            if (data == null) return;
+          window.customWebGazer.showPredictionPoints(true);
+          window.customWebGazer.showVideo(true);
+          
+          window.customWebGazer.setGazeListener((data: GazeData | null, timestamp: number) => {
+            if (!data || !isConnectedRef.current) return;
 
-            // Convert gaze coordinates to percentage of screen
-            const x = (data.x / window.innerWidth) * 100;
-            const y = (data.y / window.innerHeight) * 100;
-            
-            // Determine direction based on gaze position
-            if (y < 30) {
-              setCurrentDirection('forward');
-            } else if (y > 70) {
-              setCurrentDirection('backward');
-            } else if (x < 30) {
-              setCurrentDirection('left');
-            } else if (x > 70) {
-              setCurrentDirection('right');
-            } else {
-              setCurrentDirection(null);
+            // DOM hit-testing for movement buttons
+            const buttonIds = ['forward', 'backward', 'left', 'right', 'stop'];
+            let direction: string | null = null;
+
+            for (const id of buttonIds) {
+              const btn = document.getElementById(id);
+              if (btn) {
+                const rect = btn.getBoundingClientRect();
+                if (
+                  data.x >= rect.left &&
+                  data.x <= rect.right &&
+                  data.y >= rect.top &&
+                  data.y <= rect.bottom
+                ) {
+                  direction = id;
+                  break;
+                }
+              }
             }
 
-            // Auto-disable calibration after some time
-            if (isCalibrating && data.confidence > 0.5) {
-              setTimeout(() => setIsCalibrating(false), 2000);
-            }
+            setCurrentDirection(direction);
+            processGazeCommand(direction, timestamp);
           });
 
           window.customWebGazer.begin();
@@ -87,85 +244,148 @@ const WheelchairControlPage: React.FC = () => {
     };
 
     initializeWebGazer();
+  }, [isConnected]);
 
-    return () => {
-      if (window.customWebGazer && webgazerStarted.current) {
+  // Cleanup function
+  const cleanup = () => {
+    try {
+      if (window.customWebGazer && typeof window.customWebGazer.end === 'function' && webgazerStarted.current) {
         window.customWebGazer.end();
         webgazerStarted.current = false;
       }
+      
+      if (webgazerScript.current && webgazerScript.current.parentNode) {
+        webgazerScript.current.parentNode.removeChild(webgazerScript.current);
+        webgazerScript.current = null;
+      }
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
+  };
+
+  // Handle back button
+  const handleBack = () => {
+    cleanup();
+    // Force a hard reload to the gaze-tracking page
+    window.location.replace('/gaze-tracking');
+  };
+
+  useEffect(() => {
+    return () => cleanup();
+  }, []);
+
+  // Add cleanup for brake timeout
+  useEffect(() => {
+    return () => {
+      if (brakeTimeoutRef.current) {
+        clearTimeout(brakeTimeoutRef.current);
+      }
     };
-  }, [isCalibrating]);
+  }, []);
 
   return (
-    <div className="fixed inset-0 bg-gray-100 flex flex-col">
-      {/* Back button - moved to right side */}
-      <button
-        onClick={() => navigate('/gaze-tracking')}
-        className="absolute top-4 right-4 z-10 flex items-center space-x-2 px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
-      >
-        <span>Back to Control</span>
-        <ArrowLeftCircle size={24} className="transform rotate-180" />
-      </button>
+    <div className="fixed inset-0 flex flex-col">
+      {/* Background video */}
+      <video
+        ref={backgroundVideoRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 w-full h-full object-cover opacity-100 z-0"
+      />
 
-      {/* Calibration overlay */}
-      {isCalibrating && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-          <div className="text-center text-white p-6">
-            <h3 className="text-xl font-bold mb-2">Calibrating Eye Tracking</h3>
-            <p className="mb-4">Please look at different points on the screen to calibrate the eye tracker.</p>
-            <p className="text-sm">This may take a few moments...</p>
-          </div>
+      {/* Connection status banner */}
+      <div className={`fixed top-0 left-0 right-0 p-2 text-center text-white font-medium z-30 ${
+        isConnected ? 'bg-green-600' : 'bg-red-600'
+      }`}>
+        {isConnected ? 'Connected to wheelchair' : 'Not connected - Please connect on Bluetooth page'}
+      </div>
+
+      {/* Brake status indicator */}
+      {isBraking && (
+        <div className="fixed top-16 left-0 right-0 p-2 text-center text-white font-medium z-30 bg-yellow-600">
+          Braking...
         </div>
       )}
 
+      {/* Controls Bar */}
+      <div className="absolute top-4 right-4 z-20 flex flex-col items-end space-y-4">
+        {/* Speed Control */}
+        <div className="flex items-center space-x-4 bg-white/90 p-2 rounded-lg shadow-md">
+          <span className="text-sm font-medium">{currentSpeed}%</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={currentSpeed}
+            onChange={(e) => updateSpeed(parseInt(e.target.value))}
+            className="w-32"
+          />
+        </div>
+
+        {/* Back Button */}
+        <a
+          href="/gaze-tracking"
+          onClick={(e) => {
+            e.preventDefault();
+            handleBack();
+          }}
+          className="flex items-center space-x-2 px-4 py-2 bg-white/90 rounded-lg shadow-md hover:bg-gray-50 transition-colors"
+        >
+          <span>Back to Control</span>
+          <ArrowLeftCircle size={24} className="transform rotate-180" />
+        </a>
+      </div>
+
       {/* Movement buttons grid */}
-      <div className="flex-1 grid grid-cols-3 grid-rows-3 gap-4 p-4">
+      <div className="flex-1 grid grid-cols-3 grid-rows-3 gap-4 p-4 mt-20">
         {/* Forward button */}
         <button
+          id="forward"
           className={`col-start-2 row-start-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
             currentDirection === 'forward' ? 'bg-blue-600/40' : ''
           }`}
-          onClick={() => console.log('Moving forward')}
         >
           <ArrowUp size={64} />
         </button>
 
         {/* Left button */}
         <button
+          id="left"
           className={`col-start-1 row-start-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
             currentDirection === 'left' ? 'bg-blue-600/40' : ''
           }`}
-          onClick={() => console.log('Turning left')}
         >
           <ArrowLeft size={64} />
         </button>
 
         {/* Stop button (center) */}
         <button
+          id="stop"
           className={`col-start-2 row-start-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
             currentDirection === null ? 'bg-gray-600/40' : ''
           }`}
-          onClick={() => console.log('Stopping')}
         >
           <div className="w-16 h-16 rounded-full border-4 border-current" />
         </button>
 
         {/* Right button */}
         <button
+          id="right"
           className={`col-start-3 row-start-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
             currentDirection === 'right' ? 'bg-blue-600/40' : ''
           }`}
-          onClick={() => console.log('Turning right')}
         >
           <ArrowRight size={64} />
         </button>
 
         {/* Backward button */}
         <button
+          id="backward"
           className={`col-start-2 row-start-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
             currentDirection === 'backward' ? 'bg-blue-600/40' : ''
           }`}
-          onClick={() => console.log('Moving backward')}
         >
           <ArrowDown size={64} />
         </button>

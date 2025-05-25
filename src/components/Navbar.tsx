@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Eye, Sliders, Bluetooth, Gauge, Menu, X } from 'lucide-react';
+import { Eye, Sliders, Bluetooth, Gauge, Menu, X, Settings } from 'lucide-react';
 import { ResizableNavbar } from './ui/resizable-navbar';
 import { motion } from 'framer-motion';
 import ThemeToggle from './ThemeToggle';
+import { Button } from './ui/button';
+import { cn } from '../lib/utils';
 
 const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -25,41 +27,45 @@ const Navbar: React.FC = () => {
   }, [location]);
 
   const navLinks = [
-    { to: '/', label: 'Home', icon: <Eye size={20} /> },
-    { to: '/calibration', label: 'Calibration', icon: <Sliders size={20} /> },
-    { to: '/bluetooth', label: 'Bluetooth', icon: <Bluetooth size={20} /> },
-    { to: '/gaze-tracking', label: 'Control', icon: <Gauge size={20} /> },
+    { to: '/', label: 'Home', icon: <Eye className="h-5 w-5" /> },
+    { to: '/calibration', label: 'Calibration', icon: <Sliders className="h-5 w-5" /> },
+    { to: '/bluetooth', label: 'Bluetooth', icon: <Bluetooth className="h-5 w-5" /> },
+    { to: '/gaze-tracking', label: 'Control', icon: <Gauge className="h-5 w-5" /> },
+    { to: '/settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
   ];
 
   return (
     <ResizableNavbar
       expanded={isExpanded}
       onExpand={setIsExpanded}
-      className={`backdrop-blur-md ${
+      className={cn(
+        "backdrop-blur-md transition-colors duration-200",
         isScrolled 
-          ? 'bg-white/80 dark:bg-gray-900/80 shadow-md' 
-          : 'bg-transparent'
-      }`}
+          ? "bg-background/80 shadow-md" 
+          : "bg-transparent"
+      )}
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <NavLink 
             to="/" 
-            className="flex items-center space-x-2 text-blue-600 dark:text-blue-400 font-bold text-xl"
+            className="flex items-center space-x-2 text-primary font-bold text-xl"
           >
-            <Eye size={28} />
+            <Eye className="h-7 w-7" />
             <span>GazeWheel</span>
           </NavLink>
 
           <div className="flex items-center space-x-4">
             <ThemeToggle />
-            <button 
+            <Button 
+              variant="ghost"
+              size="icon"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden flex items-center"
+              className="md:hidden"
               aria-label="Toggle menu"
             >
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </Button>
           </div>
 
           <nav className="hidden md:flex space-x-8">
@@ -68,11 +74,12 @@ const Navbar: React.FC = () => {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  `flex items-center space-x-1 py-2 px-1 border-b-2 transition-all duration-300 ${
+                  cn(
+                    "flex items-center space-x-1 py-2 px-1 border-b-2 transition-all duration-300",
                     isActive 
-                      ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400' 
-                      : 'border-transparent hover:border-blue-300 dark:hover:border-blue-500 hover:text-blue-500 dark:hover:text-blue-300'
-                  }`
+                      ? "border-primary text-primary" 
+                      : "border-transparent hover:border-primary/50 hover:text-primary/80"
+                  )
                 }
               >
                 <motion.div
@@ -96,7 +103,7 @@ const Navbar: React.FC = () => {
           opacity: isMenuOpen ? 1 : 0
         }}
         transition={{ duration: 0.2 }}
-        className="md:hidden overflow-hidden bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-lg"
+        className="md:hidden overflow-hidden bg-background/95 backdrop-blur-md shadow-lg"
       >
         <nav className="flex flex-col px-4 py-2">
           {navLinks.map((link) => (
@@ -104,11 +111,12 @@ const Navbar: React.FC = () => {
               key={link.to}
               to={link.to}
               className={({ isActive }) =>
-                `flex items-center space-x-3 py-3 px-2 border-l-4 ${
+                cn(
+                  "flex items-center space-x-3 py-3 px-2 border-l-4",
                   isActive 
-                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30' 
-                    : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-500'
-                }`
+                    ? "border-primary text-primary bg-primary/10" 
+                    : "border-transparent hover:bg-muted hover:border-primary/50"
+                )
               }
             >
               <motion.div

@@ -1,5 +1,35 @@
 import Swal from 'sweetalert2';
 
+let webgazerScript: HTMLScriptElement | null = null;
+let isWebGazerLoaded = false;
+
+export async function loadWebGazer(): Promise<void> {
+  if (isWebGazerLoaded) return;
+
+  return new Promise((resolve, reject) => {
+    if (window.webgazer) {
+      isWebGazerLoaded = true;
+      resolve();
+      return;
+    }
+
+    webgazerScript = document.createElement('script');
+    webgazerScript.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+    webgazerScript.async = true;
+    
+    webgazerScript.onload = () => {
+      isWebGazerLoaded = true;
+      resolve();
+    };
+    
+    webgazerScript.onerror = (error) => {
+      reject(new Error('Failed to load webgazer script'));
+    };
+
+    document.body.appendChild(webgazerScript);
+  });
+}
+
 export async function initializeWebGazer(
   onCalibrationPointClick: (node: HTMLElement) => void,
   onShowCalibrationPoint: () => void,
@@ -7,6 +37,8 @@ export async function initializeWebGazer(
   onError?: (error: any) => void
 ) {
   try {
+    await loadWebGazer();
+
     await window.webgazer.setRegression('ridge')
       .setGazeListener(function() {
         // Gaze data is being collected but not used directly
@@ -58,8 +90,23 @@ export function cleanupWebGazer() {
     try {
       window.webgazer.end();
     } catch (e) {
-      // Optionally log the error, but don't crash the app
       console.warn('webgazer.end() failed:', e);
     }
   }
+
+  if (webgazerScript && webgazerScript.parentNode) {
+    webgazerScript.parentNode.removeChild(webgazerScript);
+    webgazerScript = null;
+  }
+
+  // Remove all webgazer elements
+  document.querySelectorAll('*').forEach((element) => {
+    if (element.id && element.id.startsWith('webgazer')) {
+      element.remove();
+    }
+  });
+
+  // Clear webgazer from window
+  (window as { webgazer?: any }).webgazer = undefined;
+  isWebGazerLoaded = false;
 } 

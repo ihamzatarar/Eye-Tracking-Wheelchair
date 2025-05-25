@@ -1,8 +1,7 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './CalibrationProcess.css';
-import { initializeWebGazer, cleanupWebGazer } from '../utils/webgazerSetup';
 
 interface WebGazerParams {
   applyKalmanFilter: boolean;
@@ -15,19 +14,43 @@ interface WebGazer {
   getStoredPoints: () => [number[], number[]];
   clearData: () => void;
   end: () => void;
+  begin: () => Promise<void>;
+  setGazeListener: (listener: (data: any, timestamp: number) => void) => void;
+  showPredictionPoints: (show: boolean) => void;
+  showVideoPreview: (show: boolean) => void;
 }
 
 declare global {
   interface Window {
-    webgazer: WebGazer;
+    webgazer?: WebGazer;
     saveDataAcrossSessions: boolean;
+    calibrationPoints: Record<string, number>;
+    pointCalibrate: number;
   }
 }
+
+const cleanupWebGazerAPI = (webgazerScriptRef: React.RefObject<HTMLScriptElement>) => {
+  console.log('Cleaning up WebGazer API.');
+  try {
+    if (window.webgazer) {
+      window.webgazer.end();
+      window.webgazer.setGazeListener(() => {});
+    }
+    if (webgazerScriptRef.current && webgazerScriptRef.current.parentNode) {
+      webgazerScriptRef.current.parentNode.removeChild(webgazerScriptRef.current);
+    }
+    window.webgazer = undefined;
+  } catch (error) {
+    console.error('Error during WebGazer API cleanup:', error);
+  }
+};
 
 const CalibrationProcessPage: React.FC = () => {
   const navigate = useNavigate();
   const [pointCalibrate, setPointCalibrate] = useState(0);
   const [calibrationPoints, setCalibrationPoints] = useState<Record<string, number>>({});
+  const isInitialized = useRef(false);
+  const webgazerScript = useRef<HTMLScriptElement | null>(null);
   
   const calculatePrecision = useCallback((past50Array: [number[], number[]]) => {
     const windowHeight = window.innerHeight;
@@ -95,7 +118,9 @@ const CalibrationProcessPage: React.FC = () => {
         confirmButtonText: "Start Measurement"
       }).then((result) => {
         if (result.isConfirmed) {
-          window.webgazer.params.storingPoints = true;
+          if (window.webgazer) {
+            window.webgazer.params.storingPoints = true;
+          }
           
           let timeLeft = 5;
           const countdownInterval = setInterval(() => {
@@ -107,9 +132,12 @@ const CalibrationProcessPage: React.FC = () => {
               });
             } else {
               clearInterval(countdownInterval);
-              window.webgazer.params.storingPoints = false;
-              const past50 = window.webgazer.getStoredPoints();
-              const precision_measurement = calculatePrecision(past50);
+              let precision_measurement = 0;
+              if (window.webgazer) {
+                window.webgazer.params.storingPoints = false;
+                const past50 = window.webgazer.getStoredPoints();
+                precision_measurement = calculatePrecision(past50);
+              }
             
             const accuracyElement = document.getElementById("Accuracy");
             if (accuracyElement) {
@@ -132,7 +160,9 @@ const CalibrationProcessPage: React.FC = () => {
                   ClearCanvas();
                   navigate('/bluetooth');
                 } else {
-                  window.webgazer.clearData();
+                  if (window.webgazer) {
+                    window.webgazer.clearData();
+                  }
                   ClearCalibration();
                   ClearCanvas();
                   ShowCalibrationPoint();
@@ -145,15 +175,91 @@ const CalibrationProcessPage: React.FC = () => {
           }, 1000);
         }
       });
-  }, [navigate, calculatePrecision, ClearCanvas, ClearCalibration, ShowCalibrationPoint]);
+  }, [navigate, calculatePrecision, ClearCanvas, ShowCalibrationPoint, ClearCalibration]);
 
   useEffect(() => {
-    // Add click event listeners to all calibration points
+    if (isInitialized.current) return;
+
+    isInitialized.current = true;
+
+    const loadWebGazerScript = () => {
+      webgazerScript.current = document.createElement('script');
+      webgazerScript.current.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+      webgazerScript.current.async = true;
+      webgazerScript.current.onload = () => {
+        console.log('WebGazer script loaded.');
+        initializeWebGazerAPI();
+      };
+      webgazerScript.current.onerror = (error) => {
+        console.error('WebGazer script failed to load:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to load eye tracking script.',
+          icon: 'error'
+        });
+        isInitialized.current = false;
+      };
+      document.body.appendChild(webgazerScript.current);
+    };
+
+    const initializeWebGazerAPI = async () => {
+      if (!window.webgazer) {
+        console.error('WebGazer object not found after script load.');
+        Swal.fire({
+          title: 'Error',
+          text: 'WebGazer object not found.',
+          icon: 'error'
+        });
+        isInitialized.current = false;
+        return;
+      }
+
+      try {
+        if (window.webgazer) {
+          window.webgazer.setGazeListener(() => {});
+          await window.webgazer.begin();
+        }
+
+        console.log('WebGazer begin successful.');
+
+        ClearCanvas();
+        Swal.fire({
+          title: "Calibration",
+          text: "Please click on each of the 9 points on the screen. You must click on each point 5 times till it goes yellow. This will calibrate your eye movements.",
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showCancelButton: false,
+          confirmButtonText: "Start Calibration"
+        }).then((result) => {
+          if (result.isConfirmed) {
+            ShowCalibrationPoint();
+            addCalibrationListeners();
+          }
+        });
+
+        window.webgazer.showPredictionPoints(false);
+        window.webgazer.showVideoPreview(false);
+
+      } catch (error) {
+        console.error('WebGazer begin failed:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to start eye tracking. Please ensure camera access is allowed.',
+          icon: 'error'
+        });
+        isInitialized.current = false;
+      }
+    };
+
     const addCalibrationListeners = () => {
       document.querySelectorAll('.Calibration').forEach((element) => {
-        element.addEventListener('click', () => {
-          calPointClick(element as HTMLElement);
-        });
+        element.addEventListener('click', () => calPointClick(element as HTMLElement));
+      });
+    };
+
+    const removeCalibrationListeners = () => {
+       document.querySelectorAll('.Calibration').forEach((element) => {
+        element.removeEventListener('click', () => calPointClick(element as HTMLElement));
       });
     };
 
@@ -165,21 +271,18 @@ const CalibrationProcessPage: React.FC = () => {
         const currentPoints = (newPoints[id] || 0) + 1;
         newPoints[id] = currentPoints;
 
-        // Handle the point's visual state
         if (currentPoints === 5) {
           node.style.backgroundColor = 'yellow';
           node.setAttribute('disabled', 'disabled');
           setPointCalibrate(prevPoints => {
             const newPointCount = prevPoints + 1;
             
-            // Handle the center point and accuracy check
             if (newPointCount === 8) {
               const pt5 = document.getElementById('Pt5');
               if (pt5) pt5.style.display = 'block';
             }
             
             if (newPointCount === 9) {
-              // Use setTimeout to ensure this runs after state updates
               setTimeout(() => {
                 document.querySelectorAll('.Calibration').forEach((i) => {
                   (i as HTMLElement).style.display = 'none';
@@ -207,62 +310,23 @@ const CalibrationProcessPage: React.FC = () => {
       });
     }
 
-    function PopUpInstruction() {
-      ClearCanvas();
-      Swal.fire({
-        title: "Calibration",
-        text: "Please click on each of the 9 points on the screen. You must click on each point 5 times till it goes yellow. This will calibrate your eye movements.",
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showCancelButton: false,
-        confirmButtonText: "Start Calibration"
-      }).then((result) => {
-        if (result.isConfirmed) {
-          ShowCalibrationPoint();
-          // Add event listeners after showing calibration points
-          addCalibrationListeners();
-        }
-      });
-    }
+    loadWebGazerScript();
 
-    // Initialize WebGazer
-    initializeWebGazer(
-      calPointClick,
-      () => {
-        ShowCalibrationPoint();
-        // Add event listeners after showing calibration points
-        addCalibrationListeners();
-      },
-      PopUpInstruction,
-      () => {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to initialize eye tracking. Please make sure your camera is connected and try again.',
-          icon: 'error'
-        });
-      }
-    );
-
-    // Cleanup function to remove event listeners
     return () => {
-      cleanupWebGazer();
-      document.querySelectorAll('.Calibration').forEach((element) => {
-        element.removeEventListener('click', () => {
-          calPointClick(element as HTMLElement);
-        });
-      });
+      console.log('Effect cleanup running.');
+      removeCalibrationListeners();
+      cleanupWebGazerAPI(webgazerScript);
+      isInitialized.current = false;
     };
-  }, [navigate, calcAccuracy, ClearCanvas, ShowCalibrationPoint]);
 
-  // Back button handler
-  const handleBack = () => {
-    if (window.webgazer) {
-      window.webgazer.end();
-    }
+  }, [calcAccuracy, ClearCanvas, ShowCalibrationPoint, ClearCalibration, navigate]);
+
+  const handleBack = useCallback(() => {
+    cleanupWebGazerAPI(webgazerScript);
+    isInitialized.current = false;
     navigate('/calibration');
-  };
+  }, [navigate]);
 
-  // Add this new handler function
   const handleClearData = useCallback(() => {
     Swal.fire({
       title: 'Clear Calibration Data',
@@ -310,13 +374,24 @@ const CalibrationProcessPage: React.FC = () => {
                 <a className="accuracy-status">Not yet Calibrated</a>
               </li>
               <li>
-                <a onClick={handleBack} href="#" className="nav-link">
+                <a 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleBack();
+                  }} 
+                  href="/calibration" 
+                  className="nav-link"
+                >
                   <span className="nav-icon">←</span> Back to Calibration
                 </a>
               </li>
               <li>
                 <a 
-                  onClick={() => window.webgazer?.applyKalmanFilter(!window.webgazer?.params.applyKalmanFilter)} 
+                  onClick={() => {
+                     if (window.webgazer) {
+                       window.webgazer.applyKalmanFilter(!window.webgazer.params.applyKalmanFilter);
+                     }
+                  }} 
                   href="#" 
                   className="nav-link"
                 >
