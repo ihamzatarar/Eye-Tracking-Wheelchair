@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { BluetoothProvider } from './context/BluetoothContext';
 import Layout from './components/Layout';
+import LoadingScreen from './components/LoadingScreen';
 
 // Lazy load all pages
 const WelcomePage = React.lazy(() => import('./pages/WelcomePage'));
@@ -16,7 +17,7 @@ const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
 const PrivacyPolicyPage = React.lazy(() => import('./pages/PrivacyPolicyPage'));
 
 // Loading component
-const LoadingFallback = () => <div>Loading...</div>;
+const LoadingFallback = () => <LoadingScreen />;
 
 const App: React.FC = () => {
   return (
