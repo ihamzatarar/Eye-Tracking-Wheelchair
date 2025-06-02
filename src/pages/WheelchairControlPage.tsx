@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth } from 'lucide-react';
 import { useBluetooth } from '../context/BluetoothContext';
-import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 interface GazeData {
   x: number;
@@ -18,28 +18,15 @@ interface CustomWebGazer {
   setCamera: (cameraId: string) => void;
 }
 
-interface WheelchairSettings {
-  maxSpeed: number;
-  defaultSpeed: number;
-  accelerationRate: number;
-  decelerationRate: number;
-  brakeTimeout: number;
-}
-
 declare global {
   interface Window {
     customWebGazer: CustomWebGazer;
   }
 }
 
-const ESP32_SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0";
-const ESP32_CHARACTERISTIC_UUID = "abcdef01-1234-5678-1234-56789abcdef0";
-
 const WheelchairControlPage: React.FC = () => {
-  const navigate = useNavigate();
   const { isConnected, bleCharacteristic } = useBluetooth();
   const [currentDirection, setCurrentDirection] = useState<string | null>(null);
-  const [currentSpeed, setCurrentSpeed] = useState(50);
   const [isBraking, setIsBraking] = useState(false);
   const webgazerStarted = useRef(false);
   const webgazerScript = useRef<HTMLScriptElement | null>(null);
@@ -62,8 +49,7 @@ const WheelchairControlPage: React.FC = () => {
   useEffect(() => {
     const savedSettings = localStorage.getItem('wheelchairSettings');
     if (savedSettings) {
-      const settings: WheelchairSettings = JSON.parse(savedSettings);
-      setCurrentSpeed(settings.defaultSpeed);
+      // const settings: WheelchairSettings = JSON.parse(savedSettings); // Removed, no speed control
     }
   }, []);
 
@@ -84,14 +70,6 @@ const WheelchairControlPage: React.FC = () => {
     }
   };
 
-  // Update speed
-  const updateSpeed = (speed: number) => {
-    setCurrentSpeed(speed);
-    if (isConnected && bleCharacteristicRef.current) {
-      sendCommand(`V${speed}`);
-    }
-  };
-  
   // Function to apply brakes
   const applyBrakes = async () => {
     if (!isConnected || !bleCharacteristicRef.current) return;
@@ -294,11 +272,25 @@ const WheelchairControlPage: React.FC = () => {
         className="absolute inset-0 w-full h-full object-cover opacity-100 z-0"
       />
 
-      {/* Connection status banner */}
-      <div className={`fixed top-0 left-0 right-0 p-2 text-center text-white font-medium z-30 ${
-        isConnected ? 'bg-green-600' : 'bg-red-600'
-      }`}>
-        {isConnected ? 'Connected to wheelchair' : 'Not connected - Please connect on Bluetooth page'}
+      {/* Controls Bar - now top right, using shccda/ui components */}
+      <div className="fixed top-6 right-6 z-20 flex flex-col items-end space-y-6">
+        {/* Bluetooth Connection Status */}
+        <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg shadow text-white font-semibold ${isConnected ? 'bg-green-600' : 'bg-red-600'}`}
+             style={{ minWidth: 180, justifyContent: 'center' }}>
+          <Bluetooth size={20} />
+          <span>{isConnected ? 'Connected' : 'Not Connected'}</span>
+        </div>
+        {/* Back Button */}
+        <Button
+          onClick={handleBack}
+          variant="default"
+          size="lg"
+          className="flex items-center space-x-3"
+          aria-label="Back to Control"
+        >
+          <ArrowLeftCircle size={32} />
+          <span>Back</span>
+        </Button>
       </div>
 
       {/* Brake status indicator */}
@@ -307,36 +299,6 @@ const WheelchairControlPage: React.FC = () => {
           Braking...
         </div>
       )}
-
-      {/* Controls Bar */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col items-end space-y-4">
-        {/* Speed Control */}
-        <div className="flex items-center space-x-4 bg-white/90 p-2 rounded-lg shadow-md">
-          <span className="text-sm font-medium">{currentSpeed}%</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={currentSpeed}
-            onChange={(e) => updateSpeed(parseInt(e.target.value))}
-            className="w-32"
-          />
-        </div>
-
-        {/* Back Button */}
-        <a
-          href="/gaze-tracking"
-          onClick={(e) => {
-            e.preventDefault();
-            handleBack();
-          }}
-          className="flex items-center space-x-2 px-4 py-2 bg-white/90 rounded-lg shadow-md hover:bg-gray-50 transition-colors"
-        >
-          <span>Back to Control</span>
-          <ArrowLeftCircle size={24} className="transform rotate-180" />
-        </a>
-      </div>
 
       {/* Movement buttons grid */}
       <div className="flex-1 grid grid-cols-3 grid-rows-3 gap-4 p-4 mt-20">
