@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Gauge } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -40,7 +39,6 @@ const DEFAULT_WHEELCHAIR_SETTINGS: WheelchairSettings = {
 };
 
 const SettingsPage: React.FC = () => {
-  const navigate = useNavigate();
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [selectedFrontCamera, setSelectedFrontCamera] = useState<string>('');
   const [selectedBackCamera, setSelectedBackCamera] = useState<string>('');
@@ -90,13 +88,24 @@ const SettingsPage: React.FC = () => {
 
       setCameras(videoDevices);
 
-      // If only one camera is available, automatically set it as the front camera
+      // Check if user has already chosen cameras
+      const savedFrontCamera = localStorage.getItem('frontCameraId');
+      const savedBackCamera = localStorage.getItem('backCameraId');
+
       if (videoDevices.length === 1) {
         setSelectedFrontCamera(videoDevices[0].deviceId);
         setSelectedBackCamera(''); // Clear back camera selection
         // Save settings immediately
         localStorage.setItem('frontCameraId', videoDevices[0].deviceId);
         localStorage.setItem('backCameraId', '');
+      } else if (videoDevices.length >= 2) {
+        // Only auto-select if user hasn't chosen yet
+        if (!savedFrontCamera && !savedBackCamera) {
+          setSelectedFrontCamera(videoDevices[0].deviceId);
+          setSelectedBackCamera(videoDevices[1].deviceId);
+          localStorage.setItem('frontCameraId', videoDevices[0].deviceId);
+          localStorage.setItem('backCameraId', videoDevices[1].deviceId);
+        }
       }
     } catch (error) {
       console.error('Error loading cameras:', error);

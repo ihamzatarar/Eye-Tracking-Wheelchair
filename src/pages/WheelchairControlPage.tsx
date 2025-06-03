@@ -31,6 +31,7 @@ const WheelchairControlPage: React.FC = () => {
   const webgazerStarted = useRef(false);
   const webgazerScript = useRef<HTMLScriptElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
+  const backgroundStreamRef = useRef<MediaStream | null>(null);
   const gazeStartTime = useRef<number | null>(null);
   const currentButton = useRef<HTMLElement | null>(null);
   const isConnectedRef = useRef(isConnected);
@@ -51,6 +52,48 @@ const WheelchairControlPage: React.FC = () => {
     if (savedSettings) {
       // const settings: WheelchairSettings = JSON.parse(savedSettings); // Removed, no speed control
     }
+  }, []);
+
+  // Initialize background camera if available
+  useEffect(() => {
+    const initializeBackgroundCamera = async () => {
+      const backCameraId = localStorage.getItem('backCameraId');
+      
+      // Only use background camera if a back camera is specifically selected
+      if (backCameraId && backgroundVideoRef.current) {
+        try {
+          // Stop any existing stream
+          if (backgroundStreamRef.current) {
+            backgroundStreamRef.current.getTracks().forEach(track => track.stop());
+          }
+
+          // Get the stream from the back camera
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              deviceId: { exact: backCameraId }
+            }
+          });
+
+          backgroundStreamRef.current = stream;
+          backgroundVideoRef.current.srcObject = stream;
+          
+          console.log('Background camera initialized successfully');
+        } catch (error) {
+          console.error('Failed to initialize background camera:', error);
+          // If back camera fails, just continue without background video
+        }
+      }
+    };
+
+    initializeBackgroundCamera();
+
+    // Cleanup function
+    return () => {
+      if (backgroundStreamRef.current) {
+        backgroundStreamRef.current.getTracks().forEach(track => track.stop());
+        backgroundStreamRef.current = null;
+      }
+    };
   }, []);
 
   // Send command to ESP32
@@ -178,9 +221,16 @@ const WheelchairControlPage: React.FC = () => {
         }
 
         if (window.customWebGazer && !webgazerStarted.current) {
+          // Use front camera for eye tracking if specified
           const frontCameraId = localStorage.getItem('frontCameraId');
-          if (frontCameraId) {
-            window.customWebGazer.setCamera(frontCameraId);
+          // Note: setCamera might not be available in the official WebGazer API
+          // We'll keep this for compatibility but it may not work
+          if (frontCameraId && typeof window.customWebGazer.setCamera === 'function') {
+            try {
+              window.customWebGazer.setCamera(frontCameraId);
+            } catch (error) {
+              console.warn('setCamera not available or failed:', error);
+            }
           }
           
           window.customWebGazer.showPredictionPoints(true);
@@ -227,6 +277,12 @@ const WheelchairControlPage: React.FC = () => {
   // Cleanup function
   const cleanup = () => {
     try {
+      // Clean up background camera stream
+      if (backgroundStreamRef.current) {
+        backgroundStreamRef.current.getTracks().forEach(track => track.stop());
+        backgroundStreamRef.current = null;
+      }
+
       if (window.customWebGazer && typeof window.customWebGazer.end === 'function' && webgazerStarted.current) {
         window.customWebGazer.end();
         webgazerStarted.current = false;
@@ -263,16 +319,31 @@ const WheelchairControlPage: React.FC = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col">
-      {/* Background video */}
-      <video
-        ref={backgroundVideoRef}
-        autoPlay
-        playsInline
-        muted
-        className="absolute inset-0 w-full h-full object-cover opacity-100 z-0"
-      />
+      {/* Background video or white background depending on back camera availability */}
+      {(() => {
+        const backCameraId = typeof window !== 'undefined' ? localStorage.getItem('backCameraId') : null;
+        if (backCameraId) {
+          return (
+            <video
+              ref={backgroundVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="absolute inset-0 w-full h-full object-cover z-0"
+              style={{ backgroundColor: '#1e293b' }} // Fallback color when no video
+            />
+          );
+        } else {
+          return (
+            <div className="absolute inset-0 w-full h-full z-0" style={{ backgroundColor: 'white' }} />
+          );
+        }
+      })()}
 
-      {/* Controls Bar - now top right, using shccda/ui components */}
+      {/* Dark overlay for better button visibility */}
+      <div className="absolute inset-0 bg-black/30 z-5" />
+
+      {/* Controls Bar - now top right, using shadcn/ui components */}
       <div className="fixed top-6 right-6 z-20 flex flex-col items-end space-y-6">
         {/* Bluetooth Connection Status */}
         <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg shadow text-white font-semibold ${isConnected ? 'bg-green-600' : 'bg-red-600'}`}
@@ -301,11 +372,11 @@ const WheelchairControlPage: React.FC = () => {
       )}
 
       {/* Movement buttons grid */}
-      <div className="flex-1 grid grid-cols-3 grid-rows-3 gap-4 p-4 mt-20">
+      <div className="flex-1 grid grid-cols-3 grid-rows-3 gap-4 p-4 mt-20 relative z-10">
         {/* Forward button */}
         <button
           id="forward"
-          className={`col-start-2 row-start-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
+          className={`col-start-2 row-start-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors backdrop-blur-sm ${
             currentDirection === 'forward' ? 'bg-blue-600/40' : ''
           }`}
         >
@@ -315,7 +386,7 @@ const WheelchairControlPage: React.FC = () => {
         {/* Left button */}
         <button
           id="left"
-          className={`col-start-1 row-start-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
+          className={`col-start-1 row-start-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors backdrop-blur-sm ${
             currentDirection === 'left' ? 'bg-blue-600/40' : ''
           }`}
         >
@@ -325,7 +396,7 @@ const WheelchairControlPage: React.FC = () => {
         {/* Stop button (center) */}
         <button
           id="stop"
-          className={`col-start-2 row-start-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
+          className={`col-start-2 row-start-2 bg-gray-600/20 hover:bg-gray-600/40 text-gray-600 rounded-xl shadow-lg flex items-center justify-center transition-colors backdrop-blur-sm ${
             currentDirection === null ? 'bg-gray-600/40' : ''
           }`}
         >
@@ -335,7 +406,7 @@ const WheelchairControlPage: React.FC = () => {
         {/* Right button */}
         <button
           id="right"
-          className={`col-start-3 row-start-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
+          className={`col-start-3 row-start-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors backdrop-blur-sm ${
             currentDirection === 'right' ? 'bg-blue-600/40' : ''
           }`}
         >
@@ -345,7 +416,7 @@ const WheelchairControlPage: React.FC = () => {
         {/* Backward button */}
         <button
           id="backward"
-          className={`col-start-2 row-start-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors ${
+          className={`col-start-2 row-start-3 bg-blue-600/20 hover:bg-blue-600/40 text-blue-600 rounded-xl shadow-lg flex items-center justify-center transition-colors backdrop-blur-sm ${
             currentDirection === 'backward' ? 'bg-blue-600/40' : ''
           }`}
         >
@@ -356,4 +427,4 @@ const WheelchairControlPage: React.FC = () => {
   );
 };
 
-export default WheelchairControlPage; 
+export default WheelchairControlPage;
