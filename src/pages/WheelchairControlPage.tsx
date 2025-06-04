@@ -1,7 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth, Settings2, Trash2 } from 'lucide-react';
 import { useBluetooth } from '../context/BluetoothContext';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "../components/ui/alert-dialog";
 
 interface GazeData {
   x: number;
@@ -16,6 +28,7 @@ interface CustomWebGazer {
   showPredictionPoints: (show: boolean) => void;
   showVideo: (show: boolean) => void;
   setCamera: (cameraId: string) => void;
+  clearData: () => void;
 }
 
 declare global {
@@ -25,10 +38,12 @@ declare global {
 }
 
 const WheelchairControlPage: React.FC = () => {
-  const { isConnected, bleCharacteristic } = useBluetooth();
+  const { isConnected, bleDevice, bleCharacteristic, setConnectionState } = useBluetooth();
   const [currentDirection, setCurrentDirection] = useState<string | null>(null);
   const [isBraking, setIsBraking] = useState(false);
   const [hasBackCamera, setHasBackCamera] = useState(false);
+  const [currentSpeed, setCurrentSpeed] = useState(50);
+  const [showSpeedControl, setShowSpeedControl] = useState(false);
   const webgazerStarted = useRef(false);
   const webgazerScript = useRef<HTMLScriptElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
@@ -40,12 +55,25 @@ const WheelchairControlPage: React.FC = () => {
   const lastCommandTime = useRef<number>(Date.now());
   const brakeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const BRAKE_TIMEOUT = 500;
+  const [isScanning, setIsScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Update refs when context values change
   useEffect(() => {
     isConnectedRef.current = isConnected;
     bleCharacteristicRef.current = bleCharacteristic;
   }, [isConnected, bleCharacteristic]);
+
+  // Load saved speed on mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('wheelchairSettings');
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings);
+      if (settings.defaultSpeed) {
+        setCurrentSpeed(settings.defaultSpeed);
+      }
+    }
+  }, []);
 
   // Check if back camera is configured
   useEffect(() => {
@@ -126,6 +154,22 @@ const WheelchairControlPage: React.FC = () => {
     } catch (error) {
       console.error('Error sending command:', error);
     }
+  };
+
+  // Handle speed change
+  const handleSpeedChange = (value: number[]) => {
+    const newSpeed = value[0];
+    setCurrentSpeed(newSpeed);
+    sendCommand(`V${newSpeed}`);
+  };
+
+  // Handle clear calibration
+  const handleClearCalibration = () => {
+    if (window.customWebGazer && typeof window.customWebGazer.clearData === 'function') {
+      window.customWebGazer.clearData();
+      console.log('Calibration data cleared');
+    }
+    localStorage.removeItem('calibrationData');
   };
 
   // Function to apply brakes
@@ -332,6 +376,41 @@ const WheelchairControlPage: React.FC = () => {
     };
   }, []);
 
+  const scanForDevices = async () => {
+    setIsScanning(true);
+    setError(null);
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["12345678-1234-5678-1234-56789abcdef0"]
+      });
+      const server = await device.gatt?.connect();
+      if (!server) throw new Error('Failed to connect to GATT server');
+      const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
+      const characteristic = await service.getCharacteristic("abcdef01-1234-5678-1234-56789abcdef0");
+      setConnectionState(device, characteristic);
+    } catch (error) {
+      setError('Failed to scan/connect. Make sure Bluetooth is enabled and permissions are granted.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const disconnectDevice = async () => {
+    if (bleDevice?.gatt?.connected) {
+      try {
+        if (bleCharacteristic) {
+          const data = new TextEncoder().encode('S');
+          await bleCharacteristic.writeValue(data);
+        }
+        await bleDevice.gatt?.disconnect();
+      } catch {
+        // Optionally log error
+      }
+    }
+    setConnectionState(null, null);
+  };
+
   return (
     <div className="fixed inset-0 flex flex-col">
       {/* Background - either video or white based on camera availability */}
@@ -353,25 +432,109 @@ const WheelchairControlPage: React.FC = () => {
         <div className="absolute inset-0 bg-black/30 z-5" />
       )}
 
-      {/* Controls Bar - now top right, using shadcn/ui components */}
-      <div className="fixed top-6 right-6 z-20 flex flex-col items-end space-y-6">
-        {/* Bluetooth Connection Status */}
-        <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg shadow text-white font-semibold ${isConnected ? 'bg-green-600' : 'bg-red-600'}`}
-             style={{ minWidth: 180, justifyContent: 'center' }}>
-          <Bluetooth size={20} />
-          <span>{isConnected ? 'Connected' : 'Not Connected'}</span>
+      {/* Top Right Control Panel */}
+      <div className="fixed top-6 right-6 z-20 flex flex-col items-end space-y-3">
+        {/* Minimalistic Bluetooth Status and Connect/Disconnect Button */}
+        <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+          isConnected ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
+        }`}>
+          <Bluetooth size={14} />
+          <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+          {!isConnected ? (
+            <Button
+              onClick={scanForDevices}
+              variant="outline"
+              size="sm"
+              className="ml-2"
+              disabled={isScanning}
+            >
+              {isScanning ? 'Scanning...' : 'Connect'}
+            </Button>
+          ) : (
+            <Button
+              onClick={disconnectDevice}
+              variant="destructive"
+              size="sm"
+              className="ml-2"
+            >
+              Disconnect
+            </Button>
+          )}
         </div>
-        {/* Back Button */}
-        <Button
-          onClick={handleBack}
-          variant="default"
-          size="lg"
-          className="flex items-center space-x-3"
-          aria-label="Back to Control"
-        >
-          <ArrowLeftCircle size={32} />
-          <span>Back</span>
-        </Button>
+        {error && (
+          <div className="text-xs text-red-600 mt-1">{error}</div>
+        )}
+
+        {/* Control Buttons Row */}
+        <div className="flex items-center space-x-2">
+          {/* Speed Control Button */}
+          <Button
+            onClick={() => setShowSpeedControl(!showSpeedControl)}
+            variant="outline"
+            size="icon"
+            className="h-10 w-10"
+            aria-label="Speed Settings"
+          >
+            <Settings2 size={18} />
+          </Button>
+
+          {/* Clear Calibration Button */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10"
+                aria-label="Clear Calibration"
+              >
+                <Trash2 size={18} />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear Calibration Data?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will clear all eye tracking calibration data. You'll need to recalibrate after this action.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleClearCalibration}>Clear</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Back Button */}
+          <Button
+            onClick={handleBack}
+            variant="default"
+            size="default"
+            className="flex items-center space-x-2"
+            aria-label="Back to Control"
+          >
+            <ArrowLeftCircle size={18} />
+            <span>Back</span>
+          </Button>
+        </div>
+
+        {/* Speed Control Panel (shown when button clicked) */}
+        {showSpeedControl && (
+          <div className="bg-background/95 backdrop-blur-sm border rounded-lg p-4 shadow-lg">
+            <div className="text-sm font-medium mb-2">Speed: {currentSpeed}%</div>
+            <Slider
+              min={0}
+              max={200}
+              step={5}
+              value={[currentSpeed]}
+              onValueChange={handleSpeedChange}
+              className="w-48"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>0%</span>
+              <span>200%</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Brake status indicator */}
