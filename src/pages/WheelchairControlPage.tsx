@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth, Settings2, Trash2, Maximize2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth, Settings2, Trash2 } from 'lucide-react';
 import { useBluetooth } from '../context/BluetoothContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -57,8 +57,6 @@ const WheelchairControlPage: React.FC = () => {
   const BRAKE_TIMEOUT = 500;
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const mainContainerRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   // Update refs when context values change
   useEffect(() => {
@@ -413,61 +411,8 @@ const WheelchairControlPage: React.FC = () => {
     setConnectionState(null, null);
   };
 
-  // Request fullscreen on mount
-  useEffect(() => {
-    const goFullscreen = async () => {
-      const el = mainContainerRef.current;
-      if (el && document.fullscreenElement == null) {
-        try {
-          // @ts-expect-error
-          await (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen).call(el);
-        } catch (err) {
-          // Some browsers require user gesture, so this may fail silently
-          console.warn('Could not enter fullscreen automatically:', err);
-        }
-      }
-    };
-    goFullscreen();
-  }, []);
-
-  // Listen for fullscreen changes
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, []);
-
-  // Manual fullscreen trigger
-  const handleGoFullscreen = async () => {
-    const el = mainContainerRef.current;
-    if (el && document.fullscreenElement == null) {
-      try {
-        // @ts-expect-error
-        await (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen).call(el);
-      } catch (err) {
-        alert('Fullscreen could not be enabled. Please check your browser settings.');
-      }
-    }
-  };
-
   return (
-    <div ref={mainContainerRef} className="fixed inset-0 flex flex-col">
-      {/* Fallback Fullscreen Button */}
-      {!isFullscreen && (
-        <button
-          onClick={handleGoFullscreen}
-          className="fixed top-4 left-4 z-50 bg-black/70 text-white px-4 py-2 rounded-lg flex items-center space-x-2 shadow-lg"
-          style={{ backdropFilter: 'blur(4px)' }}
-        >
-          <Maximize2 size={18} />
-          <span>Go Fullscreen</span>
-        </button>
-      )}
-
+    <div className="fixed inset-0 flex flex-col">
       {/* Background - either video or white based on camera availability */}
       {hasBackCamera ? (
         <video
