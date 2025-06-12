@@ -65,6 +65,8 @@ const WheelchairControlPage: React.FC = () => {
   const GAZE_HISTORY_SIZE = 5;
   const GAZE_THRESHOLD = 50; // pixels threshold for considering movement significant
   const faceDetectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastValidDirection = useRef<string | null>(null);
+  const movementActive = useRef(false);
 
   // Update refs when context values change
   useEffect(() => {
@@ -242,21 +244,25 @@ const WheelchairControlPage: React.FC = () => {
       return;
     }
 
-    // Clear any existing brake timeout
-    if (brakeTimeoutRef.current) {
-      clearTimeout(brakeTimeoutRef.current);
-      brakeTimeoutRef.current = null;
-    }
-
-    // Process direction
+    // If we have a direction
     if (direction) {
       lastCommandTime.current = timestamp;
 
+      // If direction changed while moving
+      if (movementActive.current && lastValidDirection.current !== direction) {
+        console.log('Direction changed while moving - stopping first');
+        sendCommand('S');
+        movementActive.current = false;
+        lastValidDirection.current = null;
+        gazeStartTime.current = timestamp;
+        currentButton.current = { id: direction } as HTMLElement;
+        return;
+      }
+
+      // Set current button if not already set
       if (currentButton.current?.id !== direction) {
-        console.log('Direction changed from', currentButton.current?.id, 'to', direction);
         currentButton.current = { id: direction } as HTMLElement;
         gazeStartTime.current = timestamp;
-        return;
       }
 
       if (!gazeStartTime.current) {
@@ -265,7 +271,8 @@ const WheelchairControlPage: React.FC = () => {
 
       const gazeDuration = timestamp - gazeStartTime.current;
       
-      if (gazeDuration >= 1000) {
+      // Start movement after dwell time
+      if (gazeDuration >= 1000 && !movementActive.current) {
         const commands: { [key: string]: string } = {
           'forward': 'F',
           'backward': 'B',
@@ -275,19 +282,28 @@ const WheelchairControlPage: React.FC = () => {
         };
 
         const command = commands[direction] || 'S';
+        console.log('Starting movement:', direction);
         sendCommand(command);
-        
+        movementActive.current = true;
+        lastValidDirection.current = direction;
         gazeStartTime.current = timestamp;
       }
     } else {
-      // Immediately stop when gaze moves away
-      if (currentButton.current) {
-        console.log('Gaze moved away from button, stopping immediately');
+      // No direction - stop if we were moving
+      if (movementActive.current) {
+        console.log('Gaze left button - STOPPING');
+        movementActive.current = false;
+        lastValidDirection.current = null;
         currentButton.current = null;
         gazeStartTime.current = null;
-        // Send stop command immediately
+        // Send multiple stop commands
         sendCommand('S');
+        setTimeout(() => sendCommand('S'), 50);
         setCurrentDirection(null);
+      } else if (currentButton.current) {
+        // Reset selection if not moving yet
+        currentButton.current = null;
+        gazeStartTime.current = null;
       }
     }
   };
@@ -331,15 +347,25 @@ const WheelchairControlPage: React.FC = () => {
           window.customWebGazer.setGazeListener((data: GazeData | null, timestamp: number) => {
             // Check for face detection
             if (!data) {
-              // No face detected
+              // No face detected - STOP immediately if moving
+              if (movementActive.current && isConnectedRef.current) {
+                console.log('Face lost - EMERGENCY STOP');
+                sendCommand('S');
+                sendCommand('S');
+                movementActive.current = false;
+                lastValidDirection.current = null;
+                currentButton.current = null;
+                gazeStartTime.current = null;
+                setCurrentDirection(null);
+              }
+              
               if (!faceDetectionTimeoutRef.current) {
                 faceDetectionTimeoutRef.current = setTimeout(() => {
                   setFaceDetectionLost(true);
-                }, 500); // Show alert after 500ms of no detection
+                }, 500);
               }
               return;
             } else {
-              // Face detected - clear timeout and hide alert
               if (faceDetectionTimeoutRef.current) {
                 clearTimeout(faceDetectionTimeoutRef.current);
                 faceDetectionTimeoutRef.current = null;
@@ -349,44 +375,80 @@ const WheelchairControlPage: React.FC = () => {
 
             if (!isConnectedRef.current) return;
 
-            // Add to gaze history for smoothing
+            // Add to gaze history
             gazeHistory.current.push({ x: data.x, y: data.y, timestamp });
-            
-            // Keep only recent history
             if (gazeHistory.current.length > GAZE_HISTORY_SIZE) {
               gazeHistory.current.shift();
             }
 
-            // Calculate smoothed position (average of recent points)
-            if (gazeHistory.current.length < 3) return; // Need minimum points for smoothing
-            
+            // Need minimum points for processing
+            if (gazeHistory.current.length < 3) return;
+
+            // Calculate smoothed position
             const smoothedX = gazeHistory.current.reduce((sum, p) => sum + p.x, 0) / gazeHistory.current.length;
             const smoothedY = gazeHistory.current.reduce((sum, p) => sum + p.y, 0) / gazeHistory.current.length;
 
-            // DOM hit-testing for movement buttons with smoothed coordinates
+            // Check buttons with different thresholds based on movement state
             const buttonIds = ['forward', 'backward', 'left', 'right', 'stop'];
-            let direction: string | null = null;
+            let detectedDirection: string | null = null;
+            
+            // Use tighter bounds when moving (to detect when gaze leaves)
+            // Use looser bounds when not moving (to reduce jitter on activation)
+            const exitPadding = movementActive.current ? -30 : 0; // Negative padding = smaller detection area
+            const enterPadding = movementActive.current ? 0 : 20; // Positive padding = larger detection area
 
             for (const id of buttonIds) {
               const btn = document.getElementById(id);
               if (btn) {
                 const rect = btn.getBoundingClientRect();
-                // Add some padding to make detection more forgiving
-                const padding = 20;
-                if (
-                  smoothedX >= rect.left - padding &&
-                  smoothedX <= rect.right + padding &&
-                  smoothedY >= rect.top - padding &&
-                  smoothedY <= rect.bottom + padding
-                ) {
-                  direction = id;
-                  break;
+                
+                // If we're moving and this is our current button, use exit padding
+                if (movementActive.current && lastValidDirection.current === id) {
+                  if (
+                    smoothedX >= rect.left - exitPadding &&
+                    smoothedX <= rect.right + exitPadding &&
+                    smoothedY >= rect.top - exitPadding &&
+                    smoothedY <= rect.bottom + exitPadding
+                  ) {
+                    detectedDirection = id;
+                    break;
+                  }
+                } else {
+                  // Not moving or different button - use enter padding
+                  if (
+                    smoothedX >= rect.left - enterPadding &&
+                    smoothedX <= rect.right + enterPadding &&
+                    smoothedY >= rect.top - enterPadding &&
+                    smoothedY <= rect.bottom + enterPadding
+                  ) {
+                    detectedDirection = id;
+                    break;
+                  }
                 }
               }
             }
 
-            setCurrentDirection(direction);
-            processGazeCommand(direction, timestamp);
+            // Additional check: if moving and raw gaze is way off, stop immediately
+            if (movementActive.current && lastValidDirection.current) {
+              const activeBtn = document.getElementById(lastValidDirection.current);
+              if (activeBtn) {
+                const rect = activeBtn.getBoundingClientRect();
+                const safetyMargin = 50; // Large margin for safety
+                
+                if (
+                  data.x < rect.left - safetyMargin ||
+                  data.x > rect.right + safetyMargin ||
+                  data.y < rect.top - safetyMargin ||
+                  data.y > rect.bottom + safetyMargin
+                ) {
+                  console.log('Raw gaze far from button - safety stop');
+                  detectedDirection = null;
+                }
+              }
+            }
+
+            setCurrentDirection(detectedDirection);
+            processGazeCommand(detectedDirection, timestamp);
           });
 
           window.customWebGazer.begin();
