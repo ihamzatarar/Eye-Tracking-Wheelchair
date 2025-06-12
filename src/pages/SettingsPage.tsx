@@ -15,6 +15,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "../components/ui/alert-dialog";
+import { cn } from '../lib/utils';
 
 type CameraFacingMode = 'user' | 'environment' | 'unknown';
 
@@ -168,7 +169,7 @@ const SettingsPage: React.FC = () => {
             {/* Wheelchair Speed Settings Section */}
             <div className="mb-8">
               <h2 className="text-lg font-medium mb-4 flex items-center">
-                <Gauge size={20} className="mr-2" />
+                <Gauge size={20} className="mr-2 text-blue-600" />
                 Wheelchair Speed Settings
               </h2>
               {/* Default Speed */}
@@ -182,6 +183,7 @@ const SettingsPage: React.FC = () => {
                   step={5}
                   value={[wheelchairSettings.defaultSpeed]}
                   onValueChange={([v]) => handleWheelchairSettingChange('defaultSpeed', v)}
+                  className="text-blue-600"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>Slow</span>
@@ -195,7 +197,12 @@ const SettingsPage: React.FC = () => {
                     key={presetSpeed}
                     variant={wheelchairSettings.defaultSpeed === presetSpeed ? 'default' : 'outline'}
                     onClick={() => handleWheelchairSettingChange('defaultSpeed', presetSpeed)}
-                    className="w-full"
+                    className={cn(
+                      "w-full",
+                      wheelchairSettings.defaultSpeed === presetSpeed 
+                        ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                        : "hover:bg-blue-50 hover:text-blue-600 border-blue-200"
+                    )}
                   >
                     {presetSpeed}%
                   </Button>
@@ -211,7 +218,7 @@ const SettingsPage: React.FC = () => {
                   onClick={loadCameras}
                   disabled={isDetectingCameras}
                   variant="default"
-                  className="inline-flex items-center"
+                  className="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   {isDetectingCameras ? (
                     <>
@@ -249,7 +256,7 @@ const SettingsPage: React.FC = () => {
                     value={selectedFrontCamera}
                     onChange={(e) => setSelectedFrontCamera(e.target.value)}
                     disabled={cameras.length === 0}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md bg-background text-foreground border-input focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm"
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md bg-background text-foreground border-input focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm"
                   >
                     <option value="">Select a camera</option>
                     {cameras.map((camera) => (
@@ -278,7 +285,7 @@ const SettingsPage: React.FC = () => {
                     id="backCamera"
                     value={selectedBackCamera}
                     onChange={(e) => setSelectedBackCamera(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md bg-background text-foreground border-input focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm"
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border rounded-md bg-background text-foreground border-input focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm"
                   >
                     <option value="">Select a camera</option>
                     {cameras.map((camera) => (
@@ -293,7 +300,7 @@ const SettingsPage: React.FC = () => {
                 onClick={saveSettings}
                 disabled={cameras.length === 0}
                 variant="default"
-                className="mt-2"
+                className="mt-2 bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Save Camera Settings
               </Button>
@@ -303,7 +310,7 @@ const SettingsPage: React.FC = () => {
               <h2 className="text-lg font-medium mb-4">Calibration Settings</h2>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
+                  <Button variant="outline" className="hover:bg-red-50 hover:text-red-600 border-red-200">
                     Clear Calibration Data
                   </Button>
                 </AlertDialogTrigger>
@@ -316,7 +323,7 @@ const SettingsPage: React.FC = () => {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearCalibration} autoFocus>Yes, clear it</AlertDialogAction>
+                    <AlertDialogAction onClick={handleClearCalibration} className="bg-red-600 hover:bg-red-700 text-white">Yes, clear it</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -326,7 +333,7 @@ const SettingsPage: React.FC = () => {
               <Button
                 onClick={saveSettings}
                 variant="default"
-                className="ml-2"
+                className="ml-2 bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Save All Settings
               </Button>

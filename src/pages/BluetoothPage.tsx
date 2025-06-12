@@ -175,19 +175,19 @@ const BluetoothPage: React.FC = () => {
   }, [bleCharacteristic]);
 
   return (
-    <div className="min-h-screen bg-background pt-20 pb-16">
+    <div className="pt-20 pb-16">
       <div className="container mx-auto px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-4xl font-bold text-foreground mb-2">Bluetooth Connection</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-3xl font-bold mb-2">Bluetooth Connection</h1>
+              <p className="text-gray-600">
                 Connect to your wheelchair using Web Bluetooth for wireless control
               </p>
             </div>
-            <div className="flex items-center space-x-2 bg-card px-4 py-2 rounded-full shadow-sm">
+            <div className="flex items-center space-x-2 bg-card px-4 py-2 rounded-full shadow-sm border border-[hsl(var(--border))]">
               <Bluetooth size={24} className={cn(
-                connectionStatus === 'connected' ? 'text-primary' : 'text-muted-foreground'
+                connectionStatus === 'connected' ? 'text-blue-600' : 'text-muted-foreground'
               )} />
               <span className="text-sm font-medium">
                 {connectionStatus === 'connected' ? 'Web Bluetooth Active' : 'Web Bluetooth Ready'}
@@ -195,134 +195,132 @@ const BluetoothPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Available Devices</CardTitle>
-                    <div className="flex space-x-3">
-                      <Button 
-                        variant="outline" 
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="h-full bg-card dark:bg-card border border-[hsl(var(--border))]">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Available Devices</CardTitle>
+                  <div className="flex space-x-3">
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={scanForDevices}
+                      disabled={isScanning}
+                      className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <RefreshCw size={16} className={cn(isScanning && 'animate-spin')} />
+                      <span>{isScanning ? 'Scanning...' : 'Scan'}</span>
+                    </Button>
+                    
+                    {connectionStatus === 'connected' && (
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={scanForDevices}
-                        disabled={isScanning}
-                        className="flex items-center space-x-2"
+                        onClick={disconnectDevice}
+                        className="flex items-center space-x-2 hover:bg-red-50 hover:text-red-600 border-red-200"
                       >
-                        <RefreshCw size={16} className={cn(isScanning && 'animate-spin')} />
-                        <span>{isScanning ? 'Scanning...' : 'Scan'}</span>
+                        <Wifi size={16} />
+                        <span>Disconnect</span>
                       </Button>
-                      
-                      {connectionStatus === 'connected' && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={disconnectDevice}
-                          className="flex items-center space-x-2"
-                        >
-                          <Wifi size={16} />
-                          <span>Disconnect</span>
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {error && (
-                    <Alert variant="destructive" className="mb-6">
-                      <AlertCircle size={20} className="mt-0.5" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {error && (
+                  <Alert variant="destructive" className="mb-6">
+                    <AlertCircle size={20} className="mt-0.5" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
 
-                  {/* Speed Control - Only visible when connected */}
-                  {connectionStatus === 'connected' && (
-                    <div className="mb-6 p-4 bg-muted rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="speedSlider" className="text-sm font-medium">
-                          Speed Control
-                        </label>
-                        <span className="text-sm font-semibold">{speed}%</span>
-                      </div>
-                      <Slider
-                        id="speedSlider"
-                        min={0}
-                        max={100}
-                        value={[speed]}
-                        onValueChange={(value) => handleSpeedChange(value[0])}
-                        className="w-full"
-                      />
+                {/* Speed Control - Only visible when connected */}
+                {connectionStatus === 'connected' && (
+                  <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="speedSlider" className="text-sm font-medium">
+                        Speed Control
+                      </label>
+                      <span className="text-sm font-semibold">{speed}%</span>
                     </div>
-                  )}
+                    <Slider
+                      id="speedSlider"
+                      min={0}
+                      max={100}
+                      value={[speed]}
+                      onValueChange={(value) => handleSpeedChange(value[0])}
+                      className="w-full"
+                    />
+                  </div>
+                )}
 
-                  {isScanning ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-muted-foreground bg-muted/50 rounded-lg">
-                      <Search size={40} className="mb-3 animate-pulse text-primary" />
-                      <p className="text-sm font-medium">Scanning for nearby devices...</p>
-                      <p className="text-xs text-muted-foreground mt-1">This may take a few moments</p>
-                    </div>
-                  ) : devices.length === 0 ? (
-                    <div className="py-12 text-center bg-muted/50 rounded-lg">
-                      <Bluetooth size={40} className="mx-auto mb-3 text-muted-foreground" />
-                      <p className="text-sm font-medium text-muted-foreground">No devices found</p>
-                      <p className="text-xs text-muted-foreground mt-1">Click "Scan" to search for nearby devices</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {devices.map(device => (
-                        <div 
-                          key={device.deviceId} 
-                          className={cn(
-                            "p-4 rounded-lg border transition-colors",
-                            connectedDevice?.deviceId === device.deviceId 
-                              ? 'bg-primary/10 border-primary/20' 
-                              : 'bg-card hover:bg-muted/50'
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              <div className={cn(
-                                "p-2 rounded-full",
+                {isScanning ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground bg-muted/50 rounded-lg">
+                    <Search size={40} className="mb-3 animate-pulse text-blue-600" />
+                    <p className="text-sm font-medium">Scanning for nearby devices...</p>
+                    <p className="text-xs text-muted-foreground mt-1">This may take a few moments</p>
+                  </div>
+                ) : devices.length === 0 ? (
+                  <div className="py-12 text-center bg-muted/50 rounded-lg">
+                    <Bluetooth size={40} className="mx-auto mb-3 text-muted-foreground" />
+                    <p className="text-sm font-medium text-muted-foreground">No devices found</p>
+                    <p className="text-xs text-muted-foreground mt-1">Click "Scan" to search for nearby devices</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {devices.map(device => (
+                      <div 
+                        key={device.deviceId} 
+                        className={cn(
+                          "p-4 rounded-lg border transition-colors",
+                          connectedDevice?.deviceId === device.deviceId 
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' 
+                            : 'bg-card hover:bg-muted/50'
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={cn(
+                              "p-2 rounded-full",
+                              connectedDevice?.deviceId === device.deviceId 
+                                ? 'bg-blue-100 dark:bg-blue-800' 
+                                : 'bg-muted'
+                            )}>
+                              <Bluetooth size={20} className={cn(
                                 connectedDevice?.deviceId === device.deviceId 
-                                  ? 'bg-primary/20' 
-                                  : 'bg-muted'
-                              )}>
-                                <Bluetooth size={20} className={cn(
-                                  connectedDevice?.deviceId === device.deviceId 
-                                    ? 'text-primary' 
-                                    : 'text-muted-foreground'
-                                )} />
-                              </div>
-                              <div>
-                                <p className="font-medium">{device.name}</p>
-                                <p className="text-xs text-muted-foreground">ID: {device.deviceId.slice(0, 8)}...</p>
-                              </div>
+                                  ? 'text-blue-600' 
+                                  : 'text-muted-foreground'
+                              )} />
                             </div>
-                            
-                            {connectedDevice?.deviceId === device.deviceId ? (
-                              <Badge variant="success">Connected</Badge>
-                            ) : (
-                              <Button
-                                size="sm"
-                                onClick={() => connectToDevice(device)}
-                                disabled={connectionStatus === 'connecting'}
-                                className="flex items-center space-x-2"
-                              >
-                                <Wifi size={16} />
-                                <span>Connect</span>
-                              </Button>
-                            )}
+                            <div>
+                              <p className="font-medium">{device.name}</p>
+                              <p className="text-xs text-muted-foreground">ID: {device.deviceId.slice(0, 8)}...</p>
+                            </div>
                           </div>
+                          
+                          {connectedDevice?.deviceId === device.deviceId ? (
+                            <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">Connected</Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => connectToDevice(device)}
+                              disabled={connectionStatus === 'connecting'}
+                              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              <Wifi size={16} />
+                              <span>Connect</span>
+                            </Button>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="space-y-6">
-              <Card>
+              <Card className="bg-card dark:bg-card border border-[hsl(var(--border))]">
                 <CardHeader>
                   <CardTitle>Connection Status</CardTitle>
                 </CardHeader>
@@ -336,7 +334,7 @@ const BluetoothPage: React.FC = () => {
                     <div className="mt-6">
                       <Button 
                         size="sm" 
-                        className="w-full flex items-center justify-center space-x-2"
+                        className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
                         onClick={() => navigate('/gaze-tracking')}
                       >
                         <span>Continue to Control</span>
@@ -347,36 +345,36 @@ const BluetoothPage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-card dark:bg-card border border-[hsl(var(--border))]">
                 <CardHeader>
                   <div className="flex items-center space-x-2">
-                    <Shield size={20} className="text-primary" />
+                    <Shield size={20} className="text-blue-600" />
                     <CardTitle>Web Bluetooth Guide</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-3">
                     <li className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-xs font-medium text-primary">1</span>
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                        <span className="text-xs font-medium text-blue-600">1</span>
                       </div>
                       <p className="text-sm text-muted-foreground">Ensure your browser supports Web Bluetooth (Chrome, Edge, or Opera)</p>
                     </li>
                     <li className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-xs font-medium text-primary">2</span>
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                        <span className="text-xs font-medium text-blue-600">2</span>
                       </div>
                       <p className="text-sm text-muted-foreground">Grant Bluetooth permissions when prompted by your browser</p>
                     </li>
                     <li className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-xs font-medium text-primary">3</span>
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                        <span className="text-xs font-medium text-blue-600">3</span>
                       </div>
                       <p className="text-sm text-muted-foreground">Keep the browser tab open to maintain the connection</p>
                     </li>
                     <li className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-xs font-medium text-primary">4</span>
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                        <span className="text-xs font-medium text-blue-600">4</span>
                       </div>
                       <p className="text-sm text-muted-foreground">Use HTTPS or localhost for Web Bluetooth to work</p>
                     </li>
