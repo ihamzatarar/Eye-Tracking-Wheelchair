@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square, HelpCircle, Trash2, ArrowLeftCircle, Zap } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square, HelpCircle, Trash2, ArrowLeftCircle, Zap, CheckCircle } from 'lucide-react';
 
 interface WebGazerParams {
   applyKalmanFilter: boolean;
@@ -138,15 +138,6 @@ const OptimizedCalibrationProcess: React.FC = () => {
       window.webgazer.showVideoPreview(true);
       window.webgazer.applyKalmanFilter(kalmanEnabled);
       setIsInitializing(false);
-
-      const video = document.getElementById('webgazerVideoFeed');
-      const container = document.getElementById('webgazerVideoContainer');
-      if (video && container && !container.contains(video)) {
-        container.appendChild(video);
-        video.style.position = 'static'; // Remove absolute/fixed positioning
-        video.style.width = '100%';
-        video.style.height = '100%';
-      }
     } catch (error) {
       console.error('Failed to initialize WebGazer:', error);
       setIsInitializing(false);
@@ -206,13 +197,11 @@ const OptimizedCalibrationProcess: React.FC = () => {
 
   const handleBack = () => {
     cleanupWebGazer();
-    // Navigate back - you can replace this with your navigation logic
     window.location.href = '/bluetooth';
   };
 
   const handleProceedToControl = () => {
     cleanupWebGazer();
-    // Navigate to wheelchair control - you can replace this with your navigation logic
     window.location.href = '/wheelchair-control';
   };
 
@@ -229,51 +218,56 @@ const OptimizedCalibrationProcess: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+      {/* Compact Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-2">
         <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-6">
-            <h1 className="text-2xl font-bold text-gray-800">Wheelchair Eye Tracking Calibration</h1>
-            <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+          <div className="flex items-center space-x-4">
+            <h1 className="text-lg font-bold text-gray-800">Eye Tracking Calibration</h1>
+            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
               isCalibrated ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {isCalibrated ? `Calibrated (${accuracy}% accuracy)` : 'Not Calibrated'}
+              {isCalibrated ? (
+                <span className="flex items-center gap-1">
+                  <CheckCircle size={12} />
+                  {accuracy}%
+                </span>
+              ) : 'Not Calibrated'}
             </div>
           </div>
           
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
             <button
               onClick={toggleKalmanFilter}
-              className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+              className={`p-2 rounded-lg transition-colors ${
                 kalmanEnabled ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
               }`}
+              title="Kalman Filter"
             >
               <Zap size={16} />
-              <span>Kalman Filter</span>
             </button>
             
             <button
               onClick={handleClearData}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center space-x-2"
+              className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              title="Clear Data"
             >
               <Trash2 size={16} />
-              <span>Clear Data</span>
             </button>
             
             <button
               onClick={() => setShowHelp(!showHelp)}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
+              className="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              title="Help"
             >
               <HelpCircle size={16} />
-              <span>Help</span>
             </button>
             
             <button
               onClick={handleBack}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
+              className="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
+              title="Back"
             >
               <ArrowLeftCircle size={16} />
-              <span>Back</span>
             </button>
           </div>
         </div>
@@ -281,87 +275,81 @@ const OptimizedCalibrationProcess: React.FC = () => {
 
       {/* Help Panel */}
       {showHelp && (
-        <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
-          <h3 className="font-semibold text-blue-900 mb-2">How to Calibrate:</h3>
-          <ol className="list-decimal list-inside space-y-1 text-blue-800">
-            <li>Click on each wheelchair control button 5 times</li>
-            <li>Each click helps the system learn where you're looking</li>
-            <li>Buttons will turn green when complete</li>
-            <li>After all 5 buttons are calibrated, we'll measure accuracy</li>
-            <li>Keep your head still and at a comfortable distance from the screen</li>
-          </ol>
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+          <p className="text-xs text-blue-800">
+            <strong>Quick Guide:</strong> Click each button 5 times while looking at it. Green = Complete.
+          </p>
         </div>
       )}
 
       {/* Progress Bar */}
-      <div className="bg-white px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center space-x-4">
-          <span className="text-sm font-medium text-gray-600">Progress:</span>
-          <div className="flex-1 bg-gray-200 rounded-full h-3">
+      <div className="bg-white px-4 py-2 border-b border-gray-200">
+        <div className="flex items-center space-x-2">
+          <span className="text-xs font-medium text-gray-600">Progress:</span>
+          <div className="flex-1 bg-gray-200 rounded-full h-2">
             <div 
               className="bg-blue-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${(completedPoints / 5) * 100}%` }}
             />
           </div>
-          <span className="text-sm font-medium text-gray-600">{completedPoints}/5 buttons</span>
+          <span className="text-xs font-medium text-gray-600">{completedPoints}/5</span>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 flex items-center justify-center">
         {completedPoints < 5 ? (
-          <>
-            <div className="text-center mb-8">
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">
-                Calibrate Your Wheelchair Controls
+          <div className="w-full max-w-7xl">
+            <div className="text-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-700">
+                Click each button 5 times while looking at it
               </h2>
-              <p className="text-gray-600">
-                Click each button below 5 times while looking directly at it
-              </p>
             </div>
 
-            {/* Calibration Grid */}
-            <div className="max-w-4xl mx-auto">
-              <div className="grid grid-cols-3 grid-rows-3 gap-4" style={{ height: '60vh' }}>
-                {calibrationConfig.map(({ id, icon: Icon, label, position }) => {
-                  const clicks = calibrationPoints[id] || 0;
-                  const isComplete = clicks >= 5;
-                  
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => !isComplete && handleCalibrationClick(id)}
-                      className={`${position} relative rounded-xl shadow-lg flex flex-col items-center justify-center transition-all transform hover:scale-105 ${
-                        isComplete 
-                          ? 'bg-green-500 text-white cursor-default' 
-                          : 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
-                      }`}
-                      style={{ opacity: 0.2 + (clicks * 0.16) }}
-                      disabled={isComplete}
-                    >
-                      <Icon size={48} className="mb-2" />
-                      <span className="font-semibold text-lg">{label}</span>
-                      <span className="text-sm mt-1">
-                        {isComplete ? '✓ Complete' : `${clicks}/5 clicks`}
-                      </span>
-                      
-                      {/* Click indicator */}
-                      <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
-                        {[...Array(5)].map((_, i) => (
-                          <div
-                            key={i}
-                            className={`w-2 h-2 rounded-full ${
-                              i < clicks ? 'bg-white' : 'bg-white/30'
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Large Calibration Grid */}
+            <div className="grid grid-cols-3 grid-rows-3 gap-8 mx-auto" style={{ width: 'fit-content' }}>
+              {calibrationConfig.map(({ id, icon: Icon, label, position }) => {
+                const clicks = calibrationPoints[id] || 0;
+                const isComplete = clicks >= 5;
+                
+                return (
+                  <button
+                    key={id}
+                    onClick={() => !isComplete && handleCalibrationClick(id)}
+                    className={`${position} relative rounded-2xl shadow-xl flex flex-col items-center justify-center transition-all transform hover:scale-105 ${
+                      isComplete 
+                        ? 'bg-green-500 text-white cursor-default' 
+                        : 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
+                    }`}
+                    style={{ 
+                      width: '420px', 
+                      height: '240px',
+                      opacity: 0.3 + (clicks * 0.14)
+                    }}
+                    disabled={isComplete}
+                  >
+                    <Icon size={80} className="mb-3" />
+                    <span className="font-bold text-3xl">{label}</span>
+                    <span className="text-xl mt-2">
+                      {isComplete ? '✓ Complete' : `${clicks}/5`}
+                    </span>
+                    
+                    {/* Click indicator dots */}
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                      {[...Array(5)].map((_, i) => (
+                        <div
+                          key={i}
+                          className={`w-4 h-4 rounded-full ${
+                            i < clicks ? 'bg-white' : 'bg-white/30'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          </>
+          </div>
         ) : !isCalibrated ? (
           // Accuracy Measurement
           <div className="max-w-2xl mx-auto text-center">
@@ -369,7 +357,7 @@ const OptimizedCalibrationProcess: React.FC = () => {
               Measuring Accuracy
             </h2>
             <p className="text-gray-600 mb-8">
-              Please look at the center dot and don't move your eyes for 5 seconds
+              Look at the center dot for 5 seconds
             </p>
             
             <div className="relative inline-block">
@@ -393,13 +381,13 @@ const OptimizedCalibrationProcess: React.FC = () => {
                 Calibration Complete!
               </h2>
               <p className="text-xl text-green-700 mb-6">
-                Your accuracy score: <span className="font-bold">{accuracy}%</span>
+                Accuracy: <span className="font-bold">{accuracy}%</span>
               </p>
               
               <div className="space-y-4">
                 <p className="text-green-600">
                   {accuracy && accuracy >= 70 
-                    ? "Excellent! Your eye tracking is well calibrated." 
+                    ? "Excellent! Ready for wheelchair control." 
                     : "Consider recalibrating for better accuracy."}
                 </p>
                 
@@ -422,11 +410,6 @@ const OptimizedCalibrationProcess: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
-
-      {/* WebGazer Video Preview */}
-      <div className="fixed bottom-4 left-4 w-80 h-60 bg-black rounded-lg shadow-lg overflow-hidden">
-        <div id="webgazerVideoContainer" />
       </div>
     </div>
   );
