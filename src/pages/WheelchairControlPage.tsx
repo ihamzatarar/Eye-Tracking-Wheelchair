@@ -58,11 +58,13 @@ const WheelchairControlPage: React.FC = () => {
   const BRAKE_TIMEOUT = 500;
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [faceDetectionLost, setFaceDetectionLost] = useState(false);
   
   // Gaze smoothing variables
   const gazeHistory = useRef<Array<{x: number, y: number, timestamp: number}>>([]);
   const GAZE_HISTORY_SIZE = 5;
   const GAZE_THRESHOLD = 50; // pixels threshold for considering movement significant
+  const faceDetectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update refs when context values change
   useEffect(() => {
@@ -275,21 +277,17 @@ const WheelchairControlPage: React.FC = () => {
         const command = commands[direction] || 'S';
         sendCommand(command);
         
-        // Set brake timeout
-        brakeTimeoutRef.current = setTimeout(() => {
-          if (Date.now() - lastCommandTime.current >= BRAKE_TIMEOUT) {
-            applyBrakes();
-          }
-        }, BRAKE_TIMEOUT);
-
         gazeStartTime.current = timestamp;
       }
     } else {
+      // Immediately stop when gaze moves away
       if (currentButton.current) {
-        console.log('Gaze moved away from button, applying brakes');
+        console.log('Gaze moved away from button, stopping immediately');
         currentButton.current = null;
         gazeStartTime.current = null;
-        applyBrakes();
+        // Send stop command immediately
+        sendCommand('S');
+        setCurrentDirection(null);
       }
     }
   };
@@ -331,7 +329,25 @@ const WheelchairControlPage: React.FC = () => {
           window.customWebGazer.showVideo(true);
           
           window.customWebGazer.setGazeListener((data: GazeData | null, timestamp: number) => {
-            if (!data || !isConnectedRef.current) return;
+            // Check for face detection
+            if (!data) {
+              // No face detected
+              if (!faceDetectionTimeoutRef.current) {
+                faceDetectionTimeoutRef.current = setTimeout(() => {
+                  setFaceDetectionLost(true);
+                }, 500); // Show alert after 500ms of no detection
+              }
+              return;
+            } else {
+              // Face detected - clear timeout and hide alert
+              if (faceDetectionTimeoutRef.current) {
+                clearTimeout(faceDetectionTimeoutRef.current);
+                faceDetectionTimeoutRef.current = null;
+              }
+              setFaceDetectionLost(false);
+            }
+
+            if (!isConnectedRef.current) return;
 
             // Add to gaze history for smoothing
             gazeHistory.current.push({ x: data.x, y: data.y, timestamp });
@@ -418,11 +434,14 @@ const WheelchairControlPage: React.FC = () => {
     return () => cleanup();
   }, []);
 
-  // Add cleanup for brake timeout
+  // Add cleanup for brake timeout and face detection timeout
   useEffect(() => {
     return () => {
       if (brakeTimeoutRef.current) {
         clearTimeout(brakeTimeoutRef.current);
+      }
+      if (faceDetectionTimeoutRef.current) {
+        clearTimeout(faceDetectionTimeoutRef.current);
       }
     };
   }, []);
@@ -608,6 +627,15 @@ const WheelchairControlPage: React.FC = () => {
         {isBraking && (
           <div className="absolute top-16 left-0 right-0 p-2 text-center text-white font-medium z-30 bg-yellow-600">
             Braking...
+          </div>
+        )}
+
+        {/* Face detection alert */}
+        {faceDetectionLost && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 bg-red-600 text-white p-6 rounded-lg shadow-2xl max-w-md text-center">
+            <div className="text-2xl font-bold mb-2">⚠️ Face Not Detected</div>
+            <div className="text-lg">Please center your face in the camera view</div>
+            <div className="text-sm mt-2 opacity-90">The red border on the video indicates tracking issues</div>
           </div>
         )}
 
