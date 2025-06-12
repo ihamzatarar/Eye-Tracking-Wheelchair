@@ -58,6 +58,11 @@ const WheelchairControlPage: React.FC = () => {
   const BRAKE_TIMEOUT = 500;
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Gaze smoothing variables
+  const gazeHistory = useRef<Array<{x: number, y: number, timestamp: number}>>([]);
+  const GAZE_HISTORY_SIZE = 5;
+  const GAZE_THRESHOLD = 50; // pixels threshold for considering movement significant
 
   // Update refs when context values change
   useEffect(() => {
@@ -328,7 +333,21 @@ const WheelchairControlPage: React.FC = () => {
           window.customWebGazer.setGazeListener((data: GazeData | null, timestamp: number) => {
             if (!data || !isConnectedRef.current) return;
 
-            // DOM hit-testing for movement buttons
+            // Add to gaze history for smoothing
+            gazeHistory.current.push({ x: data.x, y: data.y, timestamp });
+            
+            // Keep only recent history
+            if (gazeHistory.current.length > GAZE_HISTORY_SIZE) {
+              gazeHistory.current.shift();
+            }
+
+            // Calculate smoothed position (average of recent points)
+            if (gazeHistory.current.length < 3) return; // Need minimum points for smoothing
+            
+            const smoothedX = gazeHistory.current.reduce((sum, p) => sum + p.x, 0) / gazeHistory.current.length;
+            const smoothedY = gazeHistory.current.reduce((sum, p) => sum + p.y, 0) / gazeHistory.current.length;
+
+            // DOM hit-testing for movement buttons with smoothed coordinates
             const buttonIds = ['forward', 'backward', 'left', 'right', 'stop'];
             let direction: string | null = null;
 
@@ -336,11 +355,13 @@ const WheelchairControlPage: React.FC = () => {
               const btn = document.getElementById(id);
               if (btn) {
                 const rect = btn.getBoundingClientRect();
+                // Add some padding to make detection more forgiving
+                const padding = 20;
                 if (
-                  data.x >= rect.left &&
-                  data.x <= rect.right &&
-                  data.y >= rect.top &&
-                  data.y <= rect.bottom
+                  smoothedX >= rect.left - padding &&
+                  smoothedX <= rect.right + padding &&
+                  smoothedY >= rect.top - padding &&
+                  smoothedY <= rect.bottom + padding
                 ) {
                   direction = id;
                   break;
@@ -590,56 +611,60 @@ const WheelchairControlPage: React.FC = () => {
           </div>
         )}
 
-        {/* Movement buttons grid - using absolute positioning for full screen */}
-        <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-4 p-8 pt-24">
-          {/* Forward button */}
+        {/* Movement buttons - extended to edges for better accuracy */}
+        <div className="absolute inset-0">
+          {/* Forward button - extends to top edge */}
           <button
             id="forward"
-            className={`col-start-2 row-start-1 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+            className={`absolute top-0 left-1/3 right-1/3 h-1/3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
               currentDirection === 'forward' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
             }`}
+            style={{ clipPath: 'polygon(0 0, 100% 0, 85% 100%, 15% 100%)' }}
           >
-            <ArrowUp size={64} />
+            <ArrowUp size={80} className="mt-8" />
           </button>
 
-          {/* Left button */}
+          {/* Left button - extends to left edge */}
           <button
             id="left"
-            className={`col-start-1 row-start-2 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+            className={`absolute left-0 top-1/3 bottom-1/3 w-1/3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
               currentDirection === 'left' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
             }`}
+            style={{ clipPath: 'polygon(0 0, 100% 15%, 100% 85%, 0 100%)' }}
           >
-            <ArrowLeft size={64} />
+            <ArrowLeft size={80} className="ml-8" />
           </button>
 
-          {/* Stop button (center) */}
+          {/* Stop button (center) - larger but not extending to edges */}
           <button
             id="stop"
-            className={`col-start-2 row-start-2 ${hasBackCamera ? 'bg-gray-600/20 hover:bg-gray-600/40 text-gray-600' : 'bg-gray-600 hover:bg-gray-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
-              currentDirection === null ? (hasBackCamera ? 'bg-gray-600/40' : 'bg-gray-700') : ''
-            }`}
+            className={`absolute top-1/3 left-1/3 right-1/3 bottom-1/3 ${hasBackCamera ? 'bg-gray-600/30 hover:bg-gray-600/50 text-gray-600' : 'bg-gray-600 hover:bg-gray-700 text-white'} rounded-full shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+              currentDirection === null ? (hasBackCamera ? 'bg-gray-600/50' : 'bg-gray-700') : ''
+            } z-10`}
           >
-            <div className={`w-16 h-16 rounded-full border-4 ${hasBackCamera ? 'border-current' : 'border-white'}`} />
+            <div className={`w-24 h-24 rounded-full border-8 ${hasBackCamera ? 'border-current' : 'border-white'}`} />
           </button>
 
-          {/* Right button */}
+          {/* Right button - extends to right edge */}
           <button
             id="right"
-            className={`col-start-3 row-start-2 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+            className={`absolute right-0 top-1/3 bottom-1/3 w-1/3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
               currentDirection === 'right' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
             }`}
+            style={{ clipPath: 'polygon(0 15%, 100% 0, 100% 100%, 0 85%)' }}
           >
-            <ArrowRight size={64} />
+            <ArrowRight size={80} className="mr-8" />
           </button>
 
-          {/* Backward button */}
+          {/* Backward button - extends to bottom edge */}
           <button
             id="backward"
-            className={`col-start-2 row-start-3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+            className={`absolute bottom-0 left-1/3 right-1/3 h-1/3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
               currentDirection === 'backward' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
             }`}
+            style={{ clipPath: 'polygon(15% 0, 85% 0, 100% 100%, 0 100%)' }}
           >
-            <ArrowDown size={64} />
+            <ArrowDown size={80} className="mb-8" />
           </button>
         </div>
       </div>
