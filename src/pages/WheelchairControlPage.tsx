@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth, Settings2, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, ArrowLeftCircle, Bluetooth, Settings2, Trash2, Maximize, Minimize } from 'lucide-react';
 import { useBluetooth } from '../context/BluetoothContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -44,6 +44,7 @@ const WheelchairControlPage: React.FC = () => {
   const [hasBackCamera, setHasBackCamera] = useState(false);
   const [currentSpeed, setCurrentSpeed] = useState(50);
   const [showSpeedControl, setShowSpeedControl] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const webgazerStarted = useRef(false);
   const webgazerScript = useRef<HTMLScriptElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
@@ -137,6 +138,35 @@ const WheelchairControlPage: React.FC = () => {
         backgroundStreamRef.current = null;
       }
     };
+  }, []);
+
+  // Handle fullscreen toggle
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } catch (err) {
+        console.error('Error attempting to enable fullscreen:', err);
+      }
+    } else {
+      try {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      } catch (err) {
+        console.error('Error attempting to exit fullscreen:', err);
+      }
+    }
+  };
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
   // Send command to ESP32
@@ -412,7 +442,7 @@ const WheelchairControlPage: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col">
+    <div className="fixed inset-0 w-screen h-screen overflow-hidden">
       {/* Background - either video or white based on camera availability */}
       {hasBackCamera ? (
         <video
@@ -432,169 +462,183 @@ const WheelchairControlPage: React.FC = () => {
         <div className="absolute inset-0 bg-black/30 z-5" />
       )}
 
-      {/* Top Right Control Panel */}
-      <div className="fixed top-6 right-6 z-20 flex flex-col items-end space-y-3">
-        {/* Minimalistic Bluetooth Status and Connect/Disconnect Button */}
-        <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-          isConnected ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
-        }`}>
-          <Bluetooth size={14} />
-          <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
-          {!isConnected ? (
+      {/* Main content container */}
+      <div className="relative w-full h-full z-10">
+        {/* Top Right Control Panel */}
+        <div className="absolute top-6 right-6 z-20 flex flex-col items-end space-y-3">
+          {/* Minimalistic Bluetooth Status and Connect/Disconnect Button */}
+          <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium ${
+            isConnected ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
+          }`}>
+            <Bluetooth size={14} />
+            <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+            {!isConnected ? (
+              <Button
+                onClick={scanForDevices}
+                variant="outline"
+                size="sm"
+                className="ml-2"
+                disabled={isScanning}
+              >
+                {isScanning ? 'Scanning...' : 'Connect'}
+              </Button>
+            ) : (
+              <Button
+                onClick={disconnectDevice}
+                variant="destructive"
+                size="sm"
+                className="ml-2"
+              >
+                Disconnect
+              </Button>
+            )}
+          </div>
+          {error && (
+            <div className="text-xs text-red-600 mt-1">{error}</div>
+          )}
+
+          {/* Control Buttons Row */}
+          <div className="flex items-center space-x-2">
+            {/* Fullscreen Button */}
             <Button
-              onClick={scanForDevices}
+              onClick={toggleFullscreen}
               variant="outline"
-              size="sm"
-              className="ml-2"
-              disabled={isScanning}
+              size="icon"
+              className="h-10 w-10"
+              aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
             >
-              {isScanning ? 'Scanning...' : 'Connect'}
+              {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
             </Button>
-          ) : (
+
+            {/* Speed Control Button */}
             <Button
-              onClick={disconnectDevice}
-              variant="destructive"
-              size="sm"
-              className="ml-2"
+              onClick={() => setShowSpeedControl(!showSpeedControl)}
+              variant="outline"
+              size="icon"
+              className="h-10 w-10"
+              aria-label="Speed Settings"
             >
-              Disconnect
+              <Settings2 size={18} />
             </Button>
+
+            {/* Clear Calibration Button */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  aria-label="Clear Calibration"
+                >
+                  <Trash2 size={18} />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear Calibration Data?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear all eye tracking calibration data. You'll need to recalibrate after this action.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearCalibration}>Clear</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Back Button */}
+            <Button
+              onClick={handleBack}
+              variant="default"
+              size="default"
+              className="flex items-center space-x-2"
+              aria-label="Back to Control"
+            >
+              <ArrowLeftCircle size={18} />
+              <span>Back</span>
+            </Button>
+          </div>
+
+          {/* Speed Control Panel (shown when button clicked) */}
+          {showSpeedControl && (
+            <div className="bg-background/95 backdrop-blur-sm border rounded-lg p-4 shadow-lg">
+              <div className="text-sm font-medium mb-2">Speed: {currentSpeed}%</div>
+              <Slider
+                min={0}
+                max={200}
+                step={5}
+                value={[currentSpeed]}
+                onValueChange={handleSpeedChange}
+                className="w-48"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>0%</span>
+                <span>200%</span>
+              </div>
+            </div>
           )}
         </div>
-        {error && (
-          <div className="text-xs text-red-600 mt-1">{error}</div>
-        )}
 
-        {/* Control Buttons Row */}
-        <div className="flex items-center space-x-2">
-          {/* Speed Control Button */}
-          <Button
-            onClick={() => setShowSpeedControl(!showSpeedControl)}
-            variant="outline"
-            size="icon"
-            className="h-10 w-10"
-            aria-label="Speed Settings"
-          >
-            <Settings2 size={18} />
-          </Button>
-
-          {/* Clear Calibration Button */}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10"
-                aria-label="Clear Calibration"
-              >
-                <Trash2 size={18} />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Clear Calibration Data?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will clear all eye tracking calibration data. You'll need to recalibrate after this action.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearCalibration}>Clear</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
-          {/* Back Button */}
-          <Button
-            onClick={handleBack}
-            variant="default"
-            size="default"
-            className="flex items-center space-x-2"
-            aria-label="Back to Control"
-          >
-            <ArrowLeftCircle size={18} />
-            <span>Back</span>
-          </Button>
-        </div>
-
-        {/* Speed Control Panel (shown when button clicked) */}
-        {showSpeedControl && (
-          <div className="bg-background/95 backdrop-blur-sm border rounded-lg p-4 shadow-lg">
-            <div className="text-sm font-medium mb-2">Speed: {currentSpeed}%</div>
-            <Slider
-              min={0}
-              max={200}
-              step={5}
-              value={[currentSpeed]}
-              onValueChange={handleSpeedChange}
-              className="w-48"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground mt-1">
-              <span>0%</span>
-              <span>200%</span>
-            </div>
+        {/* Brake status indicator */}
+        {isBraking && (
+          <div className="absolute top-16 left-0 right-0 p-2 text-center text-white font-medium z-30 bg-yellow-600">
+            Braking...
           </div>
         )}
-      </div>
 
-      {/* Brake status indicator */}
-      {isBraking && (
-        <div className="fixed top-16 left-0 right-0 p-2 text-center text-white font-medium z-30 bg-yellow-600">
-          Braking...
+        {/* Movement buttons grid - using absolute positioning for full screen */}
+        <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 gap-4 p-8 pt-24">
+          {/* Forward button */}
+          <button
+            id="forward"
+            className={`col-start-2 row-start-1 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+              currentDirection === 'forward' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
+            }`}
+          >
+            <ArrowUp size={64} />
+          </button>
+
+          {/* Left button */}
+          <button
+            id="left"
+            className={`col-start-1 row-start-2 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+              currentDirection === 'left' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
+            }`}
+          >
+            <ArrowLeft size={64} />
+          </button>
+
+          {/* Stop button (center) */}
+          <button
+            id="stop"
+            className={`col-start-2 row-start-2 ${hasBackCamera ? 'bg-gray-600/20 hover:bg-gray-600/40 text-gray-600' : 'bg-gray-600 hover:bg-gray-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+              currentDirection === null ? (hasBackCamera ? 'bg-gray-600/40' : 'bg-gray-700') : ''
+            }`}
+          >
+            <div className={`w-16 h-16 rounded-full border-4 ${hasBackCamera ? 'border-current' : 'border-white'}`} />
+          </button>
+
+          {/* Right button */}
+          <button
+            id="right"
+            className={`col-start-3 row-start-2 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+              currentDirection === 'right' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
+            }`}
+          >
+            <ArrowRight size={64} />
+          </button>
+
+          {/* Backward button */}
+          <button
+            id="backward"
+            className={`col-start-2 row-start-3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
+              currentDirection === 'backward' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
+            }`}
+          >
+            <ArrowDown size={64} />
+          </button>
         </div>
-      )}
-
-      {/* Movement buttons grid */}
-      <div className="flex-1 grid grid-cols-3 grid-rows-3 gap-4 p-4 mt-20 relative z-10">
-        {/* Forward button */}
-        <button
-          id="forward"
-          className={`col-start-2 row-start-1 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
-            currentDirection === 'forward' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
-          }`}
-        >
-          <ArrowUp size={64} />
-        </button>
-
-        {/* Left button */}
-        <button
-          id="left"
-          className={`col-start-1 row-start-2 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
-            currentDirection === 'left' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
-          }`}
-        >
-          <ArrowLeft size={64} />
-        </button>
-
-        {/* Stop button (center) */}
-        <button
-          id="stop"
-          className={`col-start-2 row-start-2 ${hasBackCamera ? 'bg-gray-600/20 hover:bg-gray-600/40 text-gray-600' : 'bg-gray-600 hover:bg-gray-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
-            currentDirection === null ? (hasBackCamera ? 'bg-gray-600/40' : 'bg-gray-700') : ''
-          }`}
-        >
-          <div className={`w-16 h-16 rounded-full border-4 ${hasBackCamera ? 'border-current' : 'border-white'}`} />
-        </button>
-
-        {/* Right button */}
-        <button
-          id="right"
-          className={`col-start-3 row-start-2 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
-            currentDirection === 'right' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
-          }`}
-        >
-          <ArrowRight size={64} />
-        </button>
-
-        {/* Backward button */}
-        <button
-          id="backward"
-          className={`col-start-2 row-start-3 ${hasBackCamera ? 'bg-blue-600/20 hover:bg-blue-600/40 text-blue-600' : 'bg-blue-600 hover:bg-blue-700 text-white'} rounded-xl shadow-lg flex items-center justify-center transition-colors ${hasBackCamera ? 'backdrop-blur-sm' : ''} ${
-            currentDirection === 'backward' ? (hasBackCamera ? 'bg-blue-600/40' : 'bg-blue-700') : ''
-          }`}
-        >
-          <ArrowDown size={64} />
-        </button>
       </div>
     </div>
   );
