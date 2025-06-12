@@ -1,7 +1,5 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
-import './CalibrationProcess.css';
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square, HelpCircle, Trash2, ArrowLeftCircle, Zap } from 'lucide-react';
 
 interface WebGazerParams {
   applyKalmanFilter: boolean;
@@ -23,35 +21,44 @@ interface WebGazer {
 declare global {
   interface Window {
     webgazer?: WebGazer;
-    saveDataAcrossSessions: boolean;
-    calibrationPoints: Record<string, number>;
-    pointCalibrate: number;
   }
 }
 
-const cleanupWebGazerAPI = (webgazerScriptRef: React.RefObject<HTMLScriptElement>) => {
-  console.log('Cleaning up WebGazer API.');
-  try {
-    if (window.webgazer) {
-      window.webgazer.end();
-      window.webgazer.setGazeListener(() => {});
-    }
-    if (webgazerScriptRef.current && webgazerScriptRef.current.parentNode) {
-      webgazerScriptRef.current.parentNode.removeChild(webgazerScriptRef.current);
-    }
-    window.webgazer = undefined;
-  } catch (error) {
-    console.error('Error during WebGazer API cleanup:', error);
-  }
-};
-
-const CalibrationProcessPage: React.FC = () => {
-  const navigate = useNavigate();
-  const [pointCalibrate, setPointCalibrate] = useState(0);
+const OptimizedCalibrationProcess: React.FC = () => {
   const [calibrationPoints, setCalibrationPoints] = useState<Record<string, number>>({});
+  const [completedPoints, setCompletedPoints] = useState(0);
+  const [isCalibrated, setIsCalibrated] = useState(false);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [kalmanEnabled, setKalmanEnabled] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
   const isInitialized = useRef(false);
   const webgazerScript = useRef<HTMLScriptElement | null>(null);
-  
+
+  // Calibration point positions matching wheelchair controls
+  const calibrationConfig = [
+    { id: 'forward', icon: ArrowUp, label: 'Forward', position: 'col-start-2 row-start-1' },
+    { id: 'left', icon: ArrowLeft, label: 'Left', position: 'col-start-1 row-start-2' },
+    { id: 'stop', icon: Square, label: 'Stop', position: 'col-start-2 row-start-2' },
+    { id: 'right', icon: ArrowRight, label: 'Right', position: 'col-start-3 row-start-2' },
+    { id: 'backward', icon: ArrowDown, label: 'Backward', position: 'col-start-2 row-start-3' },
+  ];
+
+  const cleanupWebGazer = useCallback(() => {
+    try {
+      if (window.webgazer) {
+        window.webgazer.end();
+        window.webgazer.setGazeListener(() => {});
+      }
+      if (webgazerScript.current?.parentNode) {
+        webgazerScript.current.parentNode.removeChild(webgazerScript.current);
+      }
+      window.webgazer = undefined;
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
+  }, []);
+
   const calculatePrecision = useCallback((past50Array: [number[], number[]]) => {
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
@@ -60,417 +67,369 @@ const CalibrationProcessPage: React.FC = () => {
     const staringPointX = windowWidth / 2;
     const staringPointY = windowHeight / 2;
 
-    const precisionPercentages = new Array(50);
-    for (let x = 0; x < 50; x++) {
-      const xDiff = staringPointX - x50[x];
-      const yDiff = staringPointY - y50[x];
+    const precisionPercentages = x50.map((x, i) => {
+      const xDiff = staringPointX - x;
+      const yDiff = staringPointY - y50[i];
       const distance = Math.sqrt((xDiff * xDiff) + (yDiff * yDiff));
       const halfWindowHeight = windowHeight / 2;
-      let precision = 0;
+      
+      if (distance <= halfWindowHeight) {
+        return 100 - (distance / halfWindowHeight * 100);
+      }
+      return 0;
+    });
 
-      if (distance <= halfWindowHeight && distance > -1) {
-        precision = 100 - (distance / halfWindowHeight * 100);
-      } else if (distance > halfWindowHeight) {
-        precision = 0;
-      } else if (distance > -1) {
-        precision = 100;
+    return Math.round(precisionPercentages.reduce((a, b) => a + b, 0) / 50);
+  }, []);
+
+  const handleCalibrationClick = useCallback((pointId: string) => {
+    setCalibrationPoints(prev => {
+      const newPoints = { ...prev };
+      const currentClicks = (newPoints[pointId] || 0) + 1;
+      newPoints[pointId] = currentClicks;
+
+      if (currentClicks === 5) {
+        setCompletedPoints(p => p + 1);
       }
 
-      precisionPercentages[x] = precision;
-    }
-
-    const average = precisionPercentages.reduce((a, b) => a + b, 0) / 50;
-    return Math.round(average);
+      return newPoints;
+    });
   }, []);
 
-  const ClearCanvas = useCallback(() => {
-      document.querySelectorAll('.Calibration').forEach((i) => {
-        (i as HTMLElement).style.display = 'none';
-      });
-      const canvas = document.getElementById("plotting_canvas") as HTMLCanvasElement;
-      if (canvas) {
-        canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+  const startAccuracyMeasurement = useCallback(() => {
+    if (!window.webgazer) return;
+
+    let countdown = 5;
+    const countdownElement = document.getElementById('countdown');
+    
+    window.webgazer.params.storingPoints = true;
+    
+    const interval = setInterval(() => {
+      countdown--;
+      if (countdownElement) {
+        countdownElement.textContent = countdown.toString();
       }
-  }, []);
+      
+      if (countdown === 0) {
+        clearInterval(interval);
+        window.webgazer.params.storingPoints = false;
+        const past50 = window.webgazer.getStoredPoints();
+        const precision = calculatePrecision(past50);
+        setAccuracy(precision);
+        setIsCalibrated(true);
+        
+        // Save calibration status
+        localStorage.setItem('wheelchairCalibrationComplete', 'true');
+        localStorage.setItem('wheelchairCalibrationAccuracy', precision.toString());
+      }
+    }, 1000);
+  }, [calculatePrecision]);
 
-  const ShowCalibrationPoint = useCallback(() => {
-      document.querySelectorAll('.Calibration').forEach((i) => {
-        (i as HTMLElement).style.display = 'block';
-      });
-      const pt5 = document.getElementById('Pt5');
-      if (pt5) {
-        pt5.style.display = 'none';
+  const initializeWebGazer = useCallback(async () => {
+    if (!window.webgazer) {
+      console.error('WebGazer not loaded');
+      return;
     }
-  }, []);
 
-  const ClearCalibration = useCallback(() => {
-    setPointCalibrate(0);
-    setCalibrationPoints({});
-  }, []);
+    try {
+      window.webgazer.setGazeListener(() => {});
+      await window.webgazer.begin();
+      window.webgazer.showPredictionPoints(true);
+      window.webgazer.showVideoPreview(true);
+      window.webgazer.applyKalmanFilter(kalmanEnabled);
+      setIsInitializing(false);
 
-  const calcAccuracy = useCallback(() => {
-      Swal.fire({
-        title: "Calculating measurement",
-        text: "Please don't move your mouse & stare at the middle dot for the next 5 seconds. This will allow us to calculate the accuracy of our predictions.",
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: true,
-        confirmButtonText: "Start Measurement"
-      }).then((result) => {
-        if (result.isConfirmed) {
-          if (window.webgazer) {
-            window.webgazer.params.storingPoints = true;
-          }
-          
-          let timeLeft = 5;
-          const countdownInterval = setInterval(() => {
-            timeLeft--;
-            if (timeLeft > 0) {
-              Swal.update({
-                title: `Calculating measurement`,
-                text: `Please don't move your mouse & stare at the middle dot for the next ${timeLeft} seconds.`
-              });
-            } else {
-              clearInterval(countdownInterval);
-              let precision_measurement = 0;
-              if (window.webgazer) {
-                window.webgazer.params.storingPoints = false;
-                const past50 = window.webgazer.getStoredPoints();
-                precision_measurement = calculatePrecision(past50);
-              }
-            
-            const accuracyElement = document.getElementById("Accuracy");
-            if (accuracyElement) {
-              accuracyElement.innerHTML = `<a class="accuracy-status">Accuracy | ${precision_measurement}%</a>`;
-            }
-            
-            const checkPrecisionBtn = document.getElementById("checkPrecisionBtn");
-            if (checkPrecisionBtn) {
-              checkPrecisionBtn.style.display = "block";
-            }
-              
-              Swal.fire({
-                title: `Your accuracy measure is ${precision_measurement}%`,
-                allowOutsideClick: false,
-                showCancelButton: true,
-                confirmButtonText: "Done",
-                cancelButtonText: "Recalibrate"
-              }).then((result) => {
-                if (result.isConfirmed) {
-                  ClearCanvas();
-                  navigate('/bluetooth');
-                } else {
-                  if (window.webgazer) {
-                    window.webgazer.clearData();
-                  }
-                  ClearCalibration();
-                  ClearCanvas();
-                  ShowCalibrationPoint();
-                if (checkPrecisionBtn) {
-                  checkPrecisionBtn.style.display = "none";
-                }
-                }
-              });
-            }
-          }, 1000);
-        }
-      });
-  }, [navigate, calculatePrecision, ClearCanvas, ShowCalibrationPoint, ClearCalibration]);
+      const video = document.getElementById('webgazerVideoFeed');
+      const container = document.getElementById('webgazerVideoContainer');
+      if (video && container && !container.contains(video)) {
+        container.appendChild(video);
+        video.style.position = 'static'; // Remove absolute/fixed positioning
+        video.style.width = '100%';
+        video.style.height = '100%';
+      }
+    } catch (error) {
+      console.error('Failed to initialize WebGazer:', error);
+      setIsInitializing(false);
+    }
+  }, [kalmanEnabled]);
 
   useEffect(() => {
     if (isInitialized.current) return;
-
     isInitialized.current = true;
 
-    const loadWebGazerScript = () => {
+    // Check if already calibrated
+    const calibrationComplete = localStorage.getItem('wheelchairCalibrationComplete');
+    const savedAccuracy = localStorage.getItem('wheelchairCalibrationAccuracy');
+    
+    if (calibrationComplete === 'true' && savedAccuracy) {
+      setIsCalibrated(true);
+      setAccuracy(parseInt(savedAccuracy));
+    }
+
+    const loadWebGazer = () => {
       webgazerScript.current = document.createElement('script');
       webgazerScript.current.src = 'https://webgazer.cs.brown.edu/webgazer.js';
       webgazerScript.current.async = true;
       webgazerScript.current.onload = () => {
-        console.log('WebGazer script loaded.');
-        initializeWebGazerAPI();
-      };
-      webgazerScript.current.onerror = (error) => {
-        console.error('WebGazer script failed to load:', error);
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to load eye tracking script.',
-          icon: 'error'
-        });
-        isInitialized.current = false;
+        initializeWebGazer();
       };
       document.body.appendChild(webgazerScript.current);
     };
 
-    const initializeWebGazerAPI = async () => {
-      if (!window.webgazer) {
-        console.error('WebGazer object not found after script load.');
-        Swal.fire({
-          title: 'Error',
-          text: 'WebGazer object not found.',
-          icon: 'error'
-        });
-        isInitialized.current = false;
-        return;
-      }
-
-      try {
-        if (window.webgazer) {
-          window.webgazer.setGazeListener(() => {});
-          await window.webgazer.begin();
-        }
-
-        console.log('WebGazer begin successful.');
-
-        ClearCanvas();
-        Swal.fire({
-          title: "Calibration",
-          text: "Please click on each of the 9 points on the screen. You must click on each point 5 times till it goes yellow. This will calibrate your eye movements.",
-          allowOutsideClick: false,
-          allowEscapeKey: false,
-          showCancelButton: false,
-          confirmButtonText: "Start Calibration"
-        }).then((result) => {
-          if (result.isConfirmed) {
-            ShowCalibrationPoint();
-            addCalibrationListeners();
-          }
-        });
-
-        window.webgazer.showPredictionPoints(false);
-        window.webgazer.showVideoPreview(false);
-
-      } catch (error) {
-        console.error('WebGazer begin failed:', error);
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to start eye tracking. Please ensure camera access is allowed.',
-          icon: 'error'
-        });
-        isInitialized.current = false;
-      }
-    };
-
-    const addCalibrationListeners = () => {
-      document.querySelectorAll('.Calibration').forEach((element) => {
-        element.addEventListener('click', () => calPointClick(element as HTMLElement));
-      });
-    };
-
-    const removeCalibrationListeners = () => {
-       document.querySelectorAll('.Calibration').forEach((element) => {
-        element.removeEventListener('click', () => calPointClick(element as HTMLElement));
-      });
-    };
-
-    function calPointClick(node: HTMLElement) {
-      const id = node.id;
-      
-      setCalibrationPoints(prev => {
-        const newPoints = { ...prev };
-        const currentPoints = (newPoints[id] || 0) + 1;
-        newPoints[id] = currentPoints;
-
-        if (currentPoints === 5) {
-          node.style.backgroundColor = 'yellow';
-          node.setAttribute('disabled', 'disabled');
-          setPointCalibrate(prevPoints => {
-            const newPointCount = prevPoints + 1;
-            
-            if (newPointCount === 8) {
-              const pt5 = document.getElementById('Pt5');
-              if (pt5) pt5.style.display = 'block';
-            }
-            
-            if (newPointCount === 9) {
-              setTimeout(() => {
-                document.querySelectorAll('.Calibration').forEach((i) => {
-                  (i as HTMLElement).style.display = 'none';
-                });
-                const pt5 = document.getElementById('Pt5');
-                if (pt5) pt5.style.display = 'block';
-
-                const canvas = document.getElementById("plotting_canvas") as HTMLCanvasElement;
-                if (canvas) {
-                  canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
-                }
-
-                calcAccuracy();
-              }, 0);
-            }
-            
-            return newPointCount;
-          });
-        } else if (currentPoints < 5) {
-          const opacity = 0.2 * currentPoints + 0.2;
-          node.style.opacity = opacity.toString();
-        }
-
-        return newPoints;
-      });
-    }
-
-    loadWebGazerScript();
+    loadWebGazer();
 
     return () => {
-      console.log('Effect cleanup running.');
-      removeCalibrationListeners();
-      cleanupWebGazerAPI(webgazerScript);
+      cleanupWebGazer();
       isInitialized.current = false;
     };
-
-  }, [calcAccuracy, ClearCanvas, ShowCalibrationPoint, ClearCalibration, navigate]);
-
-  const handleBack = useCallback(() => {
-    cleanupWebGazerAPI(webgazerScript);
-    isInitialized.current = false;
-    navigate('/calibration');
-  }, [navigate]);
+  }, [initializeWebGazer, cleanupWebGazer]);
 
   const handleClearData = useCallback(() => {
-    Swal.fire({
-      title: 'Clear Calibration Data',
-      text: 'This will clear all saved calibration data. Are you sure you want to continue?',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, clear data',
-      cancelButtonText: 'Cancel',
-      confirmButtonColor: '#dc3545',
-    }).then((result) => {
-      if (result.isConfirmed) {
-        if (window.webgazer) {
-          window.webgazer.clearData();
-        }
-        localStorage.clear();
-        ClearCalibration();
-        ClearCanvas();
-        ShowCalibrationPoint();
-        const accuracyElement = document.getElementById("Accuracy");
-        if (accuracyElement) {
-          accuracyElement.innerHTML = '<a class="accuracy-status">Not yet Calibrated</a>';
-        }
-        const checkPrecisionBtn = document.getElementById("checkPrecisionBtn");
-        if (checkPrecisionBtn) {
-          checkPrecisionBtn.style.display = "none";
-        }
-        Swal.fire({
-          title: 'Data Cleared',
-          text: 'All calibration data has been cleared successfully.',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      }
-    });
-  }, [ClearCalibration, ClearCanvas, ShowCalibrationPoint]);
+    if (window.webgazer) {
+      window.webgazer.clearData();
+    }
+    localStorage.removeItem('wheelchairCalibrationComplete');
+    localStorage.removeItem('wheelchairCalibrationAccuracy');
+    setCalibrationPoints({});
+    setCompletedPoints(0);
+    setIsCalibrated(false);
+    setAccuracy(null);
+  }, []);
+
+  const toggleKalmanFilter = useCallback(() => {
+    if (window.webgazer) {
+      const newState = !kalmanEnabled;
+      window.webgazer.applyKalmanFilter(newState);
+      setKalmanEnabled(newState);
+    }
+  }, [kalmanEnabled]);
+
+  const handleBack = () => {
+    cleanupWebGazer();
+    // Navigate back - you can replace this with your navigation logic
+    window.location.href = '/bluetooth';
+  };
+
+  const handleProceedToControl = () => {
+    cleanupWebGazer();
+    // Navigate to wheelchair control - you can replace this with your navigation logic
+    window.location.href = '/wheelchair-control';
+  };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing eye tracking...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="webgazerPage">
-      <nav id="webgazerNavbar" className="navbar navbar-default navbar-fixed-top">
-        <div className="container-fluid">
-          <div className="navbar-content">
-            <ul className="nav navbar-nav">
-              <li id="Accuracy">
-                <a className="accuracy-status">Not yet Calibrated</a>
-              </li>
-              <li>
-                <a 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleBack();
-                  }} 
-                  href="/calibration" 
-                  className="nav-link"
-                >
-                  <span className="nav-icon">←</span> Back to Calibration
-                </a>
-              </li>
-              <li>
-                <a 
-                  onClick={() => {
-                     if (window.webgazer) {
-                       window.webgazer.applyKalmanFilter(!window.webgazer.params.applyKalmanFilter);
-                     }
-                  }} 
-                  href="#" 
-                  className="nav-link"
-                >
-                  <span className="nav-icon">⚡</span> Toggle Kalman Filter
-                </a>
-              </li>
-              <li>
-                <a 
-                  onClick={() => {
-                    const pt5 = document.getElementById('Pt5');
-                    if (pt5) pt5.style.display = 'block';
-                    calcAccuracy();
-                  }} 
-                  href="#" 
-                  id="checkPrecisionBtn" 
-                  className="nav-link"
-                  style={{ display: 'none' }}
-                >
-                  <span className="nav-icon">✓</span> Check Precision
-                </a>
-              </li>
-            </ul>
-            <ul className="nav navbar-nav navbar-right">
-              <li>
-                <a 
-                  onClick={handleClearData}
-                  href="#" 
-                  className="nav-link text-danger"
-                >
-                  <span className="nav-icon">🗑️</span> Clear Data
-                </a>
-              </li>
-              <li>
-                <a 
-                  onClick={() => {
-                    Swal.fire({
-                      title: "Calibration Help",
-                      html: `
-                        <div class="text-left">
-                          <p class="mb-3">Follow these steps to calibrate your eye tracking:</p>
-                          <ol class="list-decimal pl-4">
-                            <li class="mb-2">Click on each of the 9 red dots on the screen</li>
-                            <li class="mb-2">Click each point 5 times until it turns yellow</li>
-                            <li class="mb-2">After all points are yellow, stare at the center dot</li>
-                            <li class="mb-2">Wait for the accuracy measurement to complete</li>
-                          </ol>
-                          <p class="mt-4 text-sm text-gray-600">Tip: Keep your head still and maintain a consistent distance from the screen.</p>
-                        </div>
-                      `,
-                      confirmButtonText: "Got it!",
-                      confirmButtonColor: "#3085d6",
-                    });
-                  }} 
-                  href="#" 
-                  className="helpBtn"
-                >
-                  <span className="nav-icon">?</span> Help
-                </a>
-              </li>
-            </ul>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-6">
+            <h1 className="text-2xl font-bold text-gray-800">Wheelchair Eye Tracking Calibration</h1>
+            <div className={`px-4 py-2 rounded-full text-sm font-medium ${
+              isCalibrated ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {isCalibrated ? `Calibrated (${accuracy}% accuracy)` : 'Not Calibrated'}
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={toggleKalmanFilter}
+              className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                kalmanEnabled ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              <Zap size={16} />
+              <span>Kalman Filter</span>
+            </button>
+            
+            <button
+              onClick={handleClearData}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center space-x-2"
+            >
+              <Trash2 size={16} />
+              <span>Clear Data</span>
+            </button>
+            
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center space-x-2"
+            >
+              <HelpCircle size={16} />
+              <span>Help</span>
+            </button>
+            
+            <button
+              onClick={handleBack}
+              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center space-x-2"
+            >
+              <ArrowLeftCircle size={16} />
+              <span>Back</span>
+            </button>
           </div>
         </div>
-      </nav>
+      </div>
 
-      <canvas id="plotting_canvas" width="500" height="500" style={{cursor: 'crosshair'}}></canvas>
-      
-      <div className="calibrationDiv">
-        <input type="button" className="Calibration" id="Pt1"></input>
-        <input type="button" className="Calibration" id="Pt2"></input>
-        <input type="button" className="Calibration" id="Pt3"></input>
-        <input type="button" className="Calibration" id="Pt4"></input>
-        <input type="button" className="Calibration" id="Pt5"></input>
-        <input type="button" className="Calibration" id="Pt6"></input>
-        <input type="button" className="Calibration" id="Pt7"></input>
-        <input type="button" className="Calibration" id="Pt8"></input>
-        <input type="button" className="Calibration" id="Pt9"></input>
+      {/* Help Panel */}
+      {showHelp && (
+        <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
+          <h3 className="font-semibold text-blue-900 mb-2">How to Calibrate:</h3>
+          <ol className="list-decimal list-inside space-y-1 text-blue-800">
+            <li>Click on each wheelchair control button 5 times</li>
+            <li>Each click helps the system learn where you're looking</li>
+            <li>Buttons will turn green when complete</li>
+            <li>After all 5 buttons are calibrated, we'll measure accuracy</li>
+            <li>Keep your head still and at a comfortable distance from the screen</li>
+          </ol>
+        </div>
+      )}
+
+      {/* Progress Bar */}
+      <div className="bg-white px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center space-x-4">
+          <span className="text-sm font-medium text-gray-600">Progress:</span>
+          <div className="flex-1 bg-gray-200 rounded-full h-3">
+            <div 
+              className="bg-blue-500 h-full rounded-full transition-all duration-300"
+              style={{ width: `${(completedPoints / 5) * 100}%` }}
+            />
+          </div>
+          <span className="text-sm font-medium text-gray-600">{completedPoints}/5 buttons</span>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 p-8">
+        {completedPoints < 5 ? (
+          <>
+            <div className="text-center mb-8">
+              <h2 className="text-xl font-semibold text-gray-700 mb-2">
+                Calibrate Your Wheelchair Controls
+              </h2>
+              <p className="text-gray-600">
+                Click each button below 5 times while looking directly at it
+              </p>
+            </div>
+
+            {/* Calibration Grid */}
+            <div className="max-w-4xl mx-auto">
+              <div className="grid grid-cols-3 grid-rows-3 gap-4" style={{ height: '60vh' }}>
+                {calibrationConfig.map(({ id, icon: Icon, label, position }) => {
+                  const clicks = calibrationPoints[id] || 0;
+                  const isComplete = clicks >= 5;
+                  
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => !isComplete && handleCalibrationClick(id)}
+                      className={`${position} relative rounded-xl shadow-lg flex flex-col items-center justify-center transition-all transform hover:scale-105 ${
+                        isComplete 
+                          ? 'bg-green-500 text-white cursor-default' 
+                          : 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer'
+                      }`}
+                      style={{ opacity: 0.2 + (clicks * 0.16) }}
+                      disabled={isComplete}
+                    >
+                      <Icon size={48} className="mb-2" />
+                      <span className="font-semibold text-lg">{label}</span>
+                      <span className="text-sm mt-1">
+                        {isComplete ? '✓ Complete' : `${clicks}/5 clicks`}
+                      </span>
+                      
+                      {/* Click indicator */}
+                      <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                        {[...Array(5)].map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-2 h-2 rounded-full ${
+                              i < clicks ? 'bg-white' : 'bg-white/30'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        ) : !isCalibrated ? (
+          // Accuracy Measurement
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+              Measuring Accuracy
+            </h2>
+            <p className="text-gray-600 mb-8">
+              Please look at the center dot and don't move your eyes for 5 seconds
+            </p>
+            
+            <div className="relative inline-block">
+              <div className="w-32 h-32 bg-red-500 rounded-full flex items-center justify-center">
+                <span id="countdown" className="text-white text-4xl font-bold">5</span>
+              </div>
+            </div>
+            
+            <button
+              onClick={startAccuracyMeasurement}
+              className="mt-8 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              Start Measurement
+            </button>
+          </div>
+        ) : (
+          // Calibration Complete
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="bg-green-100 rounded-lg p-8">
+              <h2 className="text-3xl font-bold text-green-800 mb-4">
+                Calibration Complete!
+              </h2>
+              <p className="text-xl text-green-700 mb-6">
+                Your accuracy score: <span className="font-bold">{accuracy}%</span>
+              </p>
+              
+              <div className="space-y-4">
+                <p className="text-green-600">
+                  {accuracy && accuracy >= 70 
+                    ? "Excellent! Your eye tracking is well calibrated." 
+                    : "Consider recalibrating for better accuracy."}
+                </p>
+                
+                <div className="flex justify-center space-x-4">
+                  <button
+                    onClick={handleProceedToControl}
+                    className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    Start Using Wheelchair
+                  </button>
+                  
+                  <button
+                    onClick={handleClearData}
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    Recalibrate
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* WebGazer Video Preview */}
+      <div className="fixed bottom-4 left-4 w-80 h-60 bg-black rounded-lg shadow-lg overflow-hidden">
+        <div id="webgazerVideoContainer" />
       </div>
     </div>
   );
 };
 
-export default CalibrationProcessPage; 
+export default OptimizedCalibrationProcess;
