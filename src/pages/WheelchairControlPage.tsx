@@ -466,39 +466,39 @@ const WheelchairControlPage: React.FC = () => {
       <div className="relative w-full h-full z-10">
         {/* Top Right Control Panel */}
         <div className="absolute top-6 right-6 z-20 flex flex-col items-end space-y-3">
-          {/* Minimalistic Bluetooth Status and Connect/Disconnect Button */}
-          <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-            isConnected ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
-          }`}>
-            <Bluetooth size={14} />
-            <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+          {/* All Controls in One Row */}
+          <div className="flex items-center space-x-2">
+            {/* Connection Status */}
+            <div className={`h-10 w-10 flex items-center justify-center rounded-lg ${
+              isConnected ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'
+            }`}>
+              <Bluetooth size={18} />
+            </div>
+
+            {/* Connect/Disconnect Button */}
             {!isConnected ? (
               <Button
                 onClick={scanForDevices}
                 variant="outline"
-                size="sm"
-                className="ml-2"
+                size="icon"
+                className="h-10 w-10"
                 disabled={isScanning}
+                aria-label={isScanning ? "Scanning..." : "Connect"}
               >
-                {isScanning ? 'Scanning...' : 'Connect'}
+                <Bluetooth size={18} />
               </Button>
             ) : (
               <Button
                 onClick={disconnectDevice}
                 variant="destructive"
-                size="sm"
-                className="ml-2"
+                size="icon"
+                className="h-10 w-10"
+                aria-label="Disconnect"
               >
-                Disconnect
+                <Bluetooth size={18} className="text-white" />
               </Button>
             )}
-          </div>
-          {error && (
-            <div className="text-xs text-red-600 mt-1">{error}</div>
-          )}
 
-          {/* Control Buttons Row */}
-          <div className="flex items-center space-x-2">
             {/* Fullscreen Button */}
             <Button
               onClick={toggleFullscreen}
@@ -551,14 +551,17 @@ const WheelchairControlPage: React.FC = () => {
             <Button
               onClick={handleBack}
               variant="default"
-              size="default"
-              className="flex items-center space-x-2"
+              size="icon"
+              className="h-10 w-10"
               aria-label="Back to Control"
             >
               <ArrowLeftCircle size={18} />
-              <span>Back</span>
             </Button>
           </div>
+
+          {error && (
+            <div className="text-xs text-red-600">{error}</div>
+          )}
 
           {/* Speed Control Panel (shown when button clicked) */}
           {showSpeedControl && (
