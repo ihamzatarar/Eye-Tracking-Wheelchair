@@ -312,6 +312,20 @@ const WheelchairControlPage: React.FC = () => {
 
   // Initialize webgazer with gaze tracking
   useEffect(() => {
+    // Enter fullscreen on mount
+    const enterFullscreenOnMount = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+          setIsFullscreen(true);
+        }
+      } catch (err) {
+        console.warn('Could not enter fullscreen automatically:', err);
+      }
+    };
+
+    enterFullscreenOnMount();
+
     const initializeWebGazer = async () => {
       try {
         if (!window.customWebGazer) {
