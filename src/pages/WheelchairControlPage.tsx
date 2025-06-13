@@ -45,6 +45,8 @@ const WheelchairControlPage: React.FC = () => {
   const [currentSpeed, setCurrentSpeed] = useState(50);
   const [showSpeedControl, setShowSpeedControl] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true); // Add initializing state
+  const [faceDetected, setFaceDetected] = useState(false); // Track if face has been detected
   const webgazerStarted = useRef(false);
   const webgazerScript = useRef<HTMLScriptElement | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
@@ -366,6 +368,12 @@ const WheelchairControlPage: React.FC = () => {
               }
               return;
             } else {
+              // Face detected - hide loading screen if it's still showing
+              if (!faceDetected) {
+                setFaceDetected(true);
+                setIsInitializing(false);
+              }
+              
               if (faceDetectionTimeoutRef.current) {
                 clearTimeout(faceDetectionTimeoutRef.current);
                 faceDetectionTimeoutRef.current = null;
@@ -453,9 +461,12 @@ const WheelchairControlPage: React.FC = () => {
 
           window.customWebGazer.begin();
           webgazerStarted.current = true;
+          
+          // Don't set initializing to false here - wait for face detection
         }
       } catch (error) {
         console.error('Failed to initialize webgazer:', error);
+        setIsInitializing(false); // Set to false even on error to show the interface
       }
     };
 
@@ -542,6 +553,19 @@ const WheelchairControlPage: React.FC = () => {
     }
     setConnectionState(null, null);
   };
+
+  // Show loading screen while initializing or until face is detected
+  if (isInitializing) {
+    return (
+      <div className="fixed inset-0 bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing eye tracking...</p>
+          <p className="text-sm text-gray-500 mt-2">Please ensure your face is visible to the camera</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 w-screen h-screen overflow-hidden">
