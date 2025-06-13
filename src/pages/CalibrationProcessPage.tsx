@@ -9,13 +9,14 @@ interface WebGazerParams {
 interface WebGazer {
   applyKalmanFilter: (apply: boolean) => void;
   params: WebGazerParams;
-  getStoredPoints: () => [number[], number[]];
   clearData: () => void;
   end: () => void;
   begin: () => Promise<void>;
   setGazeListener: (listener: (data: any, timestamp: number) => void) => void;
   showPredictionPoints: (show: boolean) => void;
   showVideoPreview: (show: boolean) => void;
+  setRegression: (type: string) => WebGazer;
+  saveDataAcrossSessions: (save: boolean) => WebGazer;
 }
 
 declare global {
@@ -27,8 +28,6 @@ declare global {
 const OptimizedCalibrationProcess: React.FC = () => {
   const [calibrationPoints, setCalibrationPoints] = useState<Record<string, number>>({});
   const [completedPoints, setCompletedPoints] = useState(0);
-  const [isCalibrated, setIsCalibrated] = useState(false);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [kalmanEnabled, setKalmanEnabled] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -45,10 +44,10 @@ const OptimizedCalibrationProcess: React.FC = () => {
     { id: 'backward', icon: ArrowDown, label: 'Backward', position: 'bottom-0 left-1/3 right-1/3 h-1/3', clipPath: 'polygon(15% 0, 85% 0, 100% 100%, 0 100%)' },
   ];
 
-  // Border calibration points (8 additional points - removed top-left)
+  // Border calibration points (8 additional points)
   const borderCalibrationConfig = [
     { id: 'top-center', position: 'top-8 left-1/2 transform -translate-x-1/2' },
-    { id: 'top-right', position: 'top-24 right-8' }, // Moved down to avoid overlap with control buttons
+    { id: 'top-right', position: 'top-32 right-8' },
     { id: 'middle-left', position: 'top-1/2 left-8 transform -translate-y-1/2' },
     { id: 'middle-right', position: 'top-1/2 right-8 transform -translate-y-1/2' },
     { id: 'bottom-left', position: 'bottom-8 left-8' },
@@ -72,29 +71,6 @@ const OptimizedCalibrationProcess: React.FC = () => {
     }
   }, []);
 
-  const calculatePrecision = useCallback((past50Array: [number[], number[]]) => {
-    const windowHeight = window.innerHeight;
-    const windowWidth = window.innerWidth;
-    const x50 = past50Array[0];
-    const y50 = past50Array[1];
-    const staringPointX = windowWidth / 2;
-    const staringPointY = windowHeight / 2;
-
-    const precisionPercentages = x50.map((x, i) => {
-      const xDiff = staringPointX - x;
-      const yDiff = staringPointY - y50[i];
-      const distance = Math.sqrt((xDiff * xDiff) + (yDiff * yDiff));
-      const halfWindowHeight = windowHeight / 2;
-      
-      if (distance <= halfWindowHeight) {
-        return 100 - (distance / halfWindowHeight * 100);
-      }
-      return 0;
-    });
-
-    return Math.round(precisionPercentages.reduce((a, b) => a + b, 0) / 50);
-  }, []);
-
   const handleCalibrationClick = useCallback((pointId: string) => {
     setCalibrationPoints(prev => {
       const newPoints = { ...prev };
@@ -109,47 +85,30 @@ const OptimizedCalibrationProcess: React.FC = () => {
     });
   }, []);
 
-  const startAccuracyMeasurement = useCallback(() => {
-    if (!window.webgazer) return;
-
-    let countdown = 5;
-    const countdownElement = document.getElementById('countdown');
-    
-    window.webgazer.params.storingPoints = true;
-    
-    const interval = setInterval(() => {
-      countdown--;
-      if (countdownElement) {
-        countdownElement.textContent = countdown.toString();
-      }
-      
-      if (countdown === 0) {
-        clearInterval(interval);
-        window.webgazer.params.storingPoints = false;
-        const past50 = window.webgazer.getStoredPoints();
-        const precision = calculatePrecision(past50);
-        setAccuracy(precision);
-        setIsCalibrated(true);
-        
-        // Save calibration status
-        localStorage.setItem('wheelchairCalibrationComplete', 'true');
-        localStorage.setItem('wheelchairCalibrationAccuracy', precision.toString());
-      }
-    }, 1000);
-  }, [calculatePrecision]);
-
   const initializeWebGazer = useCallback(async () => {
     if (!window.webgazer) {
       console.error('WebGazer not loaded');
+      setIsInitializing(false);
       return;
     }
 
     try {
-      window.webgazer.setGazeListener(() => {});
-      await window.webgazer.begin();
+      // Set a proper gaze listener
+      window.webgazer.setGazeListener((data, timestamp) => {
+        if (data == null) return;
+      });
+      
+      // Initialize WebGazer with proper settings
+      await window.webgazer
+        .setRegression('ridge')
+        .saveDataAcrossSessions(true)
+        .begin();
+      
+      // Show video preview and prediction points
       window.webgazer.showPredictionPoints(true);
       window.webgazer.showVideoPreview(true);
       window.webgazer.applyKalmanFilter(kalmanEnabled);
+      
       setIsInitializing(false);
     } catch (error) {
       console.error('Failed to initialize WebGazer:', error);
@@ -161,13 +120,11 @@ const OptimizedCalibrationProcess: React.FC = () => {
     if (isInitialized.current) return;
     isInitialized.current = true;
 
-    // Check if already calibrated
-    const calibrationComplete = localStorage.getItem('wheelchairCalibrationComplete');
-    const savedAccuracy = localStorage.getItem('wheelchairCalibrationAccuracy');
-    
-    if (calibrationComplete === 'true' && savedAccuracy) {
-      setIsCalibrated(true);
-      setAccuracy(parseInt(savedAccuracy));
+    // Enter fullscreen by default
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.log('Fullscreen request failed:', err);
+      });
     }
 
     const loadWebGazer = () => {
@@ -175,7 +132,13 @@ const OptimizedCalibrationProcess: React.FC = () => {
       webgazerScript.current.src = 'https://webgazer.cs.brown.edu/webgazer.js';
       webgazerScript.current.async = true;
       webgazerScript.current.onload = () => {
-        initializeWebGazer();
+        setTimeout(() => {
+          initializeWebGazer();
+        }, 100);
+      };
+      webgazerScript.current.onerror = () => {
+        console.error('Failed to load WebGazer script');
+        setIsInitializing(false);
       };
       document.body.appendChild(webgazerScript.current);
     };
@@ -192,12 +155,8 @@ const OptimizedCalibrationProcess: React.FC = () => {
     if (window.webgazer) {
       window.webgazer.clearData();
     }
-    localStorage.removeItem('wheelchairCalibrationComplete');
-    localStorage.removeItem('wheelchairCalibrationAccuracy');
     setCalibrationPoints({});
     setCompletedPoints(0);
-    setIsCalibrated(false);
-    setAccuracy(null);
   }, []);
 
   const toggleKalmanFilter = useCallback(() => {
@@ -251,6 +210,7 @@ const OptimizedCalibrationProcess: React.FC = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Initializing eye tracking...</p>
+          <p className="text-sm text-gray-500 mt-2">Please allow camera access when prompted</p>
         </div>
       </div>
     );
@@ -259,103 +219,133 @@ const OptimizedCalibrationProcess: React.FC = () => {
   return (
     <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-white">
       {/* Top Right Control Panel */}
-      <div className="absolute top-6 right-6 z-20 flex items-center space-x-2">
-        {/* Calibration Status */}
-        <div className={`h-10 px-3 flex items-center rounded-lg ${
-          isCalibrated ? 'bg-green-500/20 text-green-700' : 'bg-yellow-500/20 text-yellow-700'
-        }`}>
-          {isCalibrated ? (
-            <span className="flex items-center gap-1 text-sm font-medium">
-              <CheckCircle size={16} />
-              {accuracy}%
-            </span>
-          ) : (
-            <span className="text-sm font-medium">Not Calibrated</span>
-          )}
+      <div className="absolute top-6 right-6 z-20">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 p-2">
+          <div className="flex items-center space-x-1">
+            {/* Calibration Status - Enhanced */}
+            <div className={`h-12 px-4 flex items-center rounded-xl transition-all ${
+              completedPoints === 13 
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-green-500/25 shadow-lg' 
+                : 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-700'
+            }`}>
+              {completedPoints === 13 ? (
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <CheckCircle size={18} className="animate-bounce" />
+                  <span>Ready!</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <div className="w-4 h-4 rounded-full bg-amber-500 animate-pulse" />
+                  <span>Calibrating</span>
+                </span>
+              )}
+            </div>
+
+            {/* Button Group with Divider */}
+            <div className="flex items-center bg-gray-50/50 rounded-xl p-1 space-x-1">
+              {/* Fullscreen Button */}
+              <button
+                onClick={toggleFullscreen}
+                className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-md transition-all group"
+                aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              >
+                {isFullscreen ? 
+                  <Minimize size={18} className="text-gray-600 group-hover:text-blue-600 transition-colors" /> : 
+                  <Maximize size={18} className="text-gray-600 group-hover:text-blue-600 transition-colors" />
+                }
+              </button>
+
+              {/* Kalman Filter Toggle - Enhanced */}
+              <button
+                onClick={toggleKalmanFilter}
+                className={`h-10 w-10 flex items-center justify-center rounded-lg transition-all ${
+                  kalmanEnabled 
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40' 
+                    : 'hover:bg-white hover:shadow-md'
+                }`}
+                title={kalmanEnabled ? "Kalman Filter ON" : "Kalman Filter OFF"}
+              >
+                <Zap size={18} className={kalmanEnabled ? 'text-white' : 'text-gray-600'} />
+              </button>
+              
+              {/* Divider */}
+              <div className="w-px h-8 bg-gray-200" />
+              
+              {/* Clear Data Button - Enhanced */}
+              <button
+                onClick={handleClearData}
+                className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-red-50 hover:shadow-md transition-all group"
+                title="Reset Calibration"
+              >
+                <Trash2 size={18} className="text-gray-600 group-hover:text-red-500 transition-colors" />
+              </button>
+              
+              {/* Help Button */}
+              <button
+                onClick={() => setShowHelp(!showHelp)}
+                className={`h-10 w-10 flex items-center justify-center rounded-lg transition-all ${
+                  showHelp ? 'bg-blue-50 shadow-md' : 'hover:bg-white hover:shadow-md'
+                }`}
+                title="Help Guide"
+              >
+                <HelpCircle size={18} className={showHelp ? 'text-blue-600' : 'text-gray-600'} />
+              </button>
+            </div>
+            
+            {/* Back Button - Separated */}
+            <button
+              onClick={handleBack}
+              className="h-12 px-4 flex items-center justify-center rounded-xl bg-gradient-to-r from-gray-700 to-gray-800 text-white hover:from-gray-800 hover:to-gray-900 transition-all shadow-lg hover:shadow-xl group"
+              title="Back to Bluetooth"
+            >
+              <ArrowLeftCircle size={18} className="group-hover:-translate-x-0.5 transition-transform" />
+              <span className="ml-2 text-sm font-medium">Back</span>
+            </button>
+          </div>
         </div>
-
-        {/* Fullscreen Button */}
-        <button
-          onClick={toggleFullscreen}
-          className="h-10 w-10 flex items-center justify-center rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
-          aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-        >
-          {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-        </button>
-
-        {/* Kalman Filter Toggle */}
-        <button
-          onClick={toggleKalmanFilter}
-          className={`h-10 w-10 flex items-center justify-center rounded-lg transition-colors ${
-            kalmanEnabled ? 'bg-blue-500 text-white hover:bg-blue-600' : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
-          }`}
-          title="Kalman Filter"
-        >
-          <Zap size={18} />
-        </button>
         
-        {/* Clear Data Button */}
-        <button
-          onClick={handleClearData}
-          className="h-10 w-10 flex items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
-          title="Clear Data"
-        >
-          <Trash2 size={18} />
-        </button>
-        
-        {/* Help Button */}
-        <button
-          onClick={() => setShowHelp(!showHelp)}
-          className="h-10 w-10 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
-          title="Help"
-        >
-          <HelpCircle size={18} />
-        </button>
-        
-        {/* Back Button */}
-        <button
-          onClick={handleBack}
-          className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-700 text-white hover:bg-gray-800 transition-colors"
-          title="Back"
-        >
-          <ArrowLeftCircle size={18} />
-        </button>
+        {/* Progress Bar - Below the buttons with simple design */}
+        <div className="mt-3 mr-24">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-medium text-gray-600">Progress:</span>
+            <div className="w-64 bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${(completedPoints / 13) * 100}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-gray-600">{completedPoints}/13</span>
+          </div>
+          {/* Instructions under progress bar */}
+          <div className="mt-2 text-right">
+            <p className="text-sm font-semibold text-gray-700">Click each button 3 times while looking at it</p>
+            <p className="text-xs text-gray-500">Complete all 13 calibration points for best accuracy</p>
+          </div>
+        </div>
       </div>
 
       {/* Help Panel */}
       {showHelp && (
-        <div className="absolute top-20 right-6 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-sm z-20 shadow-lg">
-          <p className="text-sm text-blue-800">
-            <strong>Quick Guide:</strong> Click each button 5 times while looking at it. Green = Complete. The layout matches your wheelchair control interface.
+        <div className="absolute top-32 right-6 bg-white/95 backdrop-blur-sm border border-blue-200/30 rounded-2xl p-5 max-w-sm z-20 shadow-xl">
+          <div className="absolute -top-2 right-8 w-4 h-4 bg-white border-t border-l border-blue-200/30 transform rotate-45"></div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <HelpCircle size={16} className="text-blue-600" />
+            </div>
+            Quick Guide
+          </h3>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Look at each button and click it <strong>3 times</strong>. When a button turns <span className="text-green-600 font-semibold">green ✓</span>, it's complete. The layout matches your wheelchair control interface.
           </p>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500">Tip: Complete all 13 points for best control accuracy</p>
+          </div>
         </div>
       )}
-
-      {/* Progress Bar - minimal, at top */}
-      <div className="absolute top-6 left-6 right-96 z-10">
-        <div className="flex items-center space-x-3">
-          <span className="text-sm font-medium text-gray-600">Progress:</span>
-          <div className="flex-1 bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-blue-500 h-full rounded-full transition-all duration-300"
-              style={{ width: `${(completedPoints / 13) * 100}%` }}
-            />
-          </div>
-                      <span className="text-sm font-medium text-gray-600">{completedPoints}/13</span>
-        </div>
-      </div>
 
       {/* Main Content */}
       {completedPoints < 13 ? (
         <div className="absolute inset-0">
-          {/* Instructions - center top */}
-          <div className="absolute top-20 left-0 right-0 text-center z-10">
-            <h2 className="text-xl font-semibold text-gray-700">
-              Click each button 3 times while looking at it
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">Complete all 13 calibration points for best accuracy</p>
-          </div>
-
           {/* Border Calibration Points */}
           {borderCalibrationConfig.map(({ id, position }) => {
             const clicks = calibrationPoints[id] || 0;
@@ -437,31 +427,6 @@ const OptimizedCalibrationProcess: React.FC = () => {
             );
           })}
         </div>
-      ) : !isCalibrated ? (
-        // Accuracy Measurement
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Measuring Accuracy
-            </h2>
-            <p className="text-gray-600 mb-8">
-              Look at the center dot for 5 seconds
-            </p>
-            
-            <div className="relative inline-block">
-              <div className="w-32 h-32 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
-                <span id="countdown" className="text-white text-4xl font-bold">5</span>
-              </div>
-            </div>
-            
-            <button
-              onClick={startAccuracyMeasurement}
-              className="mt-8 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-lg"
-            >
-              Start Measurement
-            </button>
-          </div>
-        </div>
       ) : (
         // Calibration Complete
         <div className="absolute inset-0 flex items-center justify-center">
@@ -469,15 +434,13 @@ const OptimizedCalibrationProcess: React.FC = () => {
             <h2 className="text-3xl font-bold text-green-800 mb-4 text-center">
               Calibration Complete!
             </h2>
-            <p className="text-xl text-green-700 mb-6 text-center">
-              Accuracy: <span className="font-bold">{accuracy}%</span>
+            <p className="text-lg text-green-700 mb-6 text-center">
+              Eye tracking is now calibrated for wheelchair control.
             </p>
             
             <div className="space-y-4">
               <p className="text-green-600 text-center">
-                {accuracy && accuracy >= 70 
-                  ? "Excellent! Ready for wheelchair control." 
-                  : "Consider recalibrating for better accuracy."}
+                You're ready to control the wheelchair with your eyes!
               </p>
               
               <div className="flex justify-center space-x-4">
