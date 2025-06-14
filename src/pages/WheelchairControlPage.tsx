@@ -395,8 +395,8 @@ const WheelchairControlPage: React.FC = () => {
             // Use tighter bounds when moving (to detect when gaze leaves)
             // Use looser bounds when not moving (to reduce jitter on activation)
             const exitPadding = movementActive.current ? -30 : 0; // Negative padding = smaller detection area
-            const enterPadding = movementActive.current ? 0 : 20; // Positive padding = larger detection area
-
+            const enterPadding = movementActive.current ? 0 : 40; // Increased padding for better edge detection
+            
             for (const id of buttonIds) {
               const btn = document.getElementById(id);
               if (btn) {
