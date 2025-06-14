@@ -372,68 +372,150 @@ const WheelchairControlPage: React.FC = () => {
               }
               setFaceDetectionLost(false);
             }
-
+          
             if (!isConnectedRef.current) return;
-
+          
             // Add to gaze history
             gazeHistory.current.push({ x: data.x, y: data.y, timestamp });
             if (gazeHistory.current.length > GAZE_HISTORY_SIZE) {
               gazeHistory.current.shift();
             }
-
+          
             // Need minimum points for processing
             if (gazeHistory.current.length < 3) return;
-
+          
             // Calculate smoothed position
             const smoothedX = gazeHistory.current.reduce((sum, p) => sum + p.x, 0) / gazeHistory.current.length;
             const smoothedY = gazeHistory.current.reduce((sum, p) => sum + p.y, 0) / gazeHistory.current.length;
-
-            // Check buttons with different thresholds based on movement state
+          
+            // Function to check if point is inside clipped button area
+            const isPointInClippedButton = (x: number, y: number, buttonId: string, rect: DOMRect): boolean => {
+              // Convert to relative coordinates within the button
+              const relativeX = (x - rect.left) / rect.width;
+              const relativeY = (y - rect.top) / rect.height;
+              
+              // Add padding for easier targeting
+              const padding = 0.15; // 15% padding on each side for better targeting
+              
+              switch (buttonId) {
+                case 'forward':
+                  // Trapezoid: polygon(0 0, 100% 0, 85% 100%, 15% 100%)
+                  // Top edge is full width, bottom edge is 15% to 85%
+                  const bottomLeftX = 0.15 - padding;
+                  const bottomRightX = 0.85 + padding;
+                  const topY = -padding;
+                  const bottomY = 1 + padding;
+                  
+                  if (relativeY < topY || relativeY > bottomY) return false;
+                  
+                  // Calculate the expected x boundaries at this y position
+                  const leftBoundary = relativeY * bottomLeftX;
+                  const rightBoundary = 1 - (relativeY * (1 - bottomRightX));
+                  
+                  return relativeX >= leftBoundary - padding && relativeX <= rightBoundary + padding;
+                  
+                case 'backward':
+                  // Trapezoid: polygon(15% 0, 85% 0, 100% 100%, 0 100%)
+                  // Top edge is 15% to 85%, bottom edge is full width
+                  const topLeftX = 0.15 - padding;
+                  const topRightX = 0.85 + padding;
+                  
+                  if (relativeY < -padding || relativeY > 1 + padding) return false;
+                  
+                  // Calculate the expected x boundaries at this y position
+                  const leftBound = topLeftX - (relativeY * topLeftX);
+                  const rightBound = topRightX + (relativeY * (1 - topRightX));
+                  
+                  return relativeX >= leftBound - padding && relativeX <= rightBound + padding;
+                  
+                case 'left':
+                  // Trapezoid: polygon(0 0, 100% 15%, 100% 85%, 0 100%)
+                  // Left edge is full height, right edge is 15% to 85%
+                  const topRightY = 0.15 - padding;
+                  const bottomRightY = 0.85 + padding;
+                  
+                  if (relativeX < -padding || relativeX > 1 + padding) return false;
+                  
+                  // Calculate the expected y boundaries at this x position
+                  const topBound = topRightY - (relativeX * topRightY);
+                  const bottomBound = bottomRightY + (relativeX * (1 - bottomRightY));
+                  
+                  return relativeY >= topBound - padding && relativeY <= bottomBound + padding;
+                  
+                case 'right':
+                  // Trapezoid: polygon(0 15%, 100% 0, 100% 100%, 0 85%)
+                  // Right edge is full height, left edge is 15% to 85%
+                  const topLeftY = 0.15 - padding;
+                  const bottomLeftY = 0.85 + padding;
+                  
+                  if (relativeX < -padding || relativeX > 1 + padding) return false;
+                  
+                  // Calculate the expected y boundaries at this x position
+                  const topBoundary = topLeftY * (1 - relativeX);
+                  const bottomBoundary = bottomLeftY + ((1 - bottomLeftY) * (1 - relativeX));
+                  
+                  return relativeY >= topBoundary - padding && relativeY <= bottomBoundary + padding;
+                  
+                case 'stop':
+                  // Circular button - use distance from center
+                  const centerX = 0.5;
+                  const centerY = 0.5;
+                  const radius = 0.45 + padding; // Slightly larger than visual circle
+                  
+                  const distance = Math.sqrt(
+                    Math.pow(relativeX - centerX, 2) + Math.pow(relativeY - centerY, 2)
+                  );
+                  
+                  return distance <= radius;
+                  
+                default:
+                  return false;
+              }
+            };
+          
+            // Check buttons with improved clipped area detection
             const buttonIds = ['forward', 'backward', 'left', 'right', 'stop'];
             let detectedDirection: string | null = null;
-            
-            // Use tighter bounds when moving (to detect when gaze leaves)
-            // Use looser bounds when not moving (to reduce jitter on activation)
-            const exitPadding = movementActive.current ? -30 : 0; // Negative padding = smaller detection area
-            const enterPadding = movementActive.current ? 0 : 40; // Increased padding for better edge detection
-            
+          
             for (const id of buttonIds) {
               const btn = document.getElementById(id);
               if (btn) {
                 const rect = btn.getBoundingClientRect();
                 
-                // If we're moving and this is our current button, use exit padding
-                if (movementActive.current && lastValidDirection.current === id) {
-                  if (
-                    smoothedX >= rect.left - exitPadding &&
-                    smoothedX <= rect.right + exitPadding &&
-                    smoothedY >= rect.top - exitPadding &&
-                    smoothedY <= rect.bottom + exitPadding
-                  ) {
-                    detectedDirection = id;
-                    break;
-                  }
-                } else {
-                  // Not moving or different button - use enter padding
-                  if (
-                    smoothedX >= rect.left - enterPadding &&
-                    smoothedX <= rect.right + enterPadding &&
-                    smoothedY >= rect.top - enterPadding &&
-                    smoothedY <= rect.bottom + enterPadding
-                  ) {
+                // Use the clipped button detection
+                if (isPointInClippedButton(smoothedX, smoothedY, id, rect)) {
+                  // If we're moving and this is our current button, check with tighter bounds
+                  if (movementActive.current && lastValidDirection.current === id) {
+                    // Use a smaller padding for exit detection to prevent accidental stops
+                    const tighterRect = {
+                      ...rect,
+                      left: rect.left + 20,
+                      right: rect.right - 20,
+                      top: rect.top + 20,
+                      bottom: rect.bottom - 20,
+                      width: rect.width - 40,
+                      height: rect.height - 40
+                    };
+                    
+                    if (isPointInClippedButton(smoothedX, smoothedY, id, tighterRect)) {
+                      detectedDirection = id;
+                      break;
+                    }
+                  } else {
+                    // Not moving or different button - use normal detection
                     detectedDirection = id;
                     break;
                   }
                 }
               }
             }
-
-            // Additional check: if moving and raw gaze is way off, stop immediately
+          
+            // Additional safety check: if moving and raw gaze is way off, stop immediately
             if (movementActive.current && lastValidDirection.current) {
               const activeBtn = document.getElementById(lastValidDirection.current);
               if (activeBtn) {
                 const rect = activeBtn.getBoundingClientRect();
-                const safetyMargin = 50; // Large margin for safety
+                const safetyMargin = 80; // Large margin for safety
                 
                 if (
                   data.x < rect.left - safetyMargin ||
@@ -446,7 +528,7 @@ const WheelchairControlPage: React.FC = () => {
                 }
               }
             }
-
+          
             setCurrentDirection(detectedDirection);
             processGazeCommand(detectedDirection, timestamp);
           });
